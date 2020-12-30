@@ -9,6 +9,7 @@ mod moves;
 mod uci;
 mod errors;
 mod perft;
+mod tests;
 use text_io::read;
 
 fn main() {
