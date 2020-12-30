@@ -10,6 +10,10 @@ pub fn sq_file(sq: usize) -> usize {
     sq % 8
 }
 
+pub fn mirror_sq(sq: usize) -> usize {
+    rank_file_to_sq(7 - sq_rank(sq), sq_file(sq))
+}
+
 pub fn algebraic_to_sq(algebraic: &str) -> usize {
     let mut chars = algebraic.chars();
 

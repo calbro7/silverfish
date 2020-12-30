@@ -9,6 +9,7 @@ mod moves;
 mod uci;
 mod errors;
 mod perft;
+mod eval;
 mod tests;
 use text_io::read;
 

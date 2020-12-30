@@ -15,7 +15,8 @@ pub struct State {
     pub occupancy: u64,
     pub to_move: Colour,
     pub ep_target: Option<usize>,
-    pub castling: u8
+    pub castling: u8,
+    pub halfmove_clock: u8
 }
 
 impl State {
@@ -26,7 +27,8 @@ impl State {
             occupancy: 0,
             to_move: Colour::White,
             ep_target: None,
-            castling: 0
+            castling: 0,
+            halfmove_clock: 0
         }
     }
 
@@ -98,6 +100,8 @@ impl State {
             sq => Some(algebraic_to_sq(sq))
         };
 
+        state.halfmove_clock = fen_segments[4].parse().unwrap();
+
         state.occupancy = state.colours[Colour::White as usize] | state.colours[Colour::Black as usize];
 
         Ok(state)
@@ -105,7 +109,7 @@ impl State {
 
     pub fn square_attacked(&self, sq: usize, colour: Colour) -> bool {
         let colour_bb = self.colours[colour as usize];
-
+        
         (pawn_attacks(sq, !colour) & self.pieces[Piece::Pawn as usize] & colour_bb != 0)
         | (knight_attacks(sq) & self.pieces[Piece::Knight as usize] & colour_bb != 0)
         | (bishop_attacks(sq, self.occupancy) & self.pieces[Piece::Bishop as usize] & colour_bb != 0)
@@ -210,6 +214,13 @@ impl State {
         }
 
         self.occupancy = self.colours[Colour::White as usize] | self.colours[Colour::Black as usize];
+
+        if is_capture || piece == Piece::Pawn {
+            self.halfmove_clock = 0;
+        }
+        else {
+            self.halfmove_clock += 1;
+        }
 
         let king_sq = get_ls1b(self.pieces[Piece::King as usize] & self.colours[self.to_move as usize]);
         if self.square_attacked(king_sq, !self.to_move) {
