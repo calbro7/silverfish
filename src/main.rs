@@ -14,7 +14,7 @@ mod tests;
 use text_io::read;
 
 fn main() {
-    let mut state = state::State::new();
+    let mut state = state::State::start_pos();
 
     loop {
         let command: String = read!("{}\n");
@@ -52,6 +52,13 @@ fn main() {
         }
         else if command.starts_with("quit") {
             break;
+        }
+        else if command.starts_with("perft") {
+            let depth: u8 = command.split_whitespace().skip(1).next().unwrap().parse().unwrap();
+            println!("{}", perft::perft(&mut state, depth, true));
+        }
+        else if command.starts_with("eval") {
+            println!("{}", eval::eval(&state))
         }
     }
 }
