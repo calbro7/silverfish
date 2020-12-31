@@ -60,14 +60,12 @@ fn position_startpos_with_moves() {
 
 #[test]
 fn go() {
-    // This test will fail as we currently do not yet have any proper move searching
-    todo!();
     let mut output = Vec::new();
     let mut uci = UciHandler::new(&mut output);
     // The best move will of course depend on the searching and evaluation, but we choose a position for which there is objectively only one standout move (capturing the hanging queen)
     uci.command("position fen rnb1kbnr/pppp1ppp/8/4p1qQ/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3");
     uci.command("go");
-    assert_eq!(String::from_utf8(output).unwrap(), format!("bestmove h5g5\n"));
+    assert!(String::from_utf8(output).unwrap().ends_with("bestmove h5g5\n"));
 }
 
 #[test]
