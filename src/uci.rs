@@ -1,6 +1,6 @@
 use crate::state::State;
 use crate::helpers::{algebraic_to_sq, sq_to_algebraic};
-use crate::moves::{BitMove, encode_move, move_from, move_to, move_promotion_piece, generate_moves};
+use crate::moves::{BitMove, encode_move, move_from, move_to, move_promotion_piece, generate_moves, move_to_algebraic};
 use crate::pieces::Piece;
 use crate::colours::Colour;
 use crate::perft::perft;
@@ -46,6 +46,9 @@ impl<W> UciHandler<W> where W: Write {
         }
         else if command.starts_with("eval") {
             self.eval();
+        }
+        else if command.starts_with("print") {
+            self.print();
         }
     }
 
@@ -149,7 +152,31 @@ impl<W> UciHandler<W> where W: Write {
 
     fn perft(&mut self, command: &str) {
         let depth: u8 = command.split_whitespace().skip(1).next().unwrap().parse().unwrap();
-        writeln!(&mut self.out, "{}", perft(&mut self.state, depth, true));
+        
+        // We wish to find all legal moves, sorted by (from, to)
+        let mut moves = generate_moves(&self.state);
+        let mut legal_moves = Vec::new();
+        while !moves.is_empty() {
+            let r#move = moves.pop();
+            let copy = self.state.clone();
+            if self.state.make_move(r#move).is_err() {
+                continue;
+            }
+            legal_moves.push(r#move);
+            self.state = copy;
+        }
+        legal_moves.sort_by(|m1,m2| (move_from(*m1), move_to(*m1)).cmp(&(move_from(*m2), move_to(*m2))));
+        
+        let mut total = 0;
+        for r#move in legal_moves {
+            let copy = self.state.clone();
+            self.state.make_move(r#move);
+            let n = perft(&mut self.state, depth-1);
+            self.state = copy;
+            total += n;
+            writeln!(&mut self.out, "{}: {}", move_to_algebraic(r#move), n);
+        }
+        writeln!(&mut self.out, "Total: {}", total);
     }
 
     fn eval(&mut self) {
@@ -157,5 +184,9 @@ impl<W> UciHandler<W> where W: Write {
             Colour::White => 1,
             Colour::Black => -1
         });
+    }
+
+    fn print(&mut self) {
+        writeln!(&mut self.out, "{}", self.state);
     }
 }

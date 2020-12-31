@@ -4,6 +4,7 @@ use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::attacks::{pawn_attacks, knight_attacks, bishop_attacks, rook_attacks, queen_attacks, king_attacks};
 use crate::castling::{CastleType, decode_castling};
+use crate::helpers::sq_to_algebraic;
 
 pub type BitMove = u32;
 
@@ -65,6 +66,18 @@ pub fn move_is_ep(r#move: BitMove) -> bool {
 }
 pub fn move_is_castle(r#move: BitMove) -> bool {
     ((r#move >> 21) & 1) != 0
+}
+
+pub fn move_to_algebraic(r#move: BitMove) -> String {
+    let promotion_suffix = match move_promotion_piece(r#move) {
+        Some(Piece::Knight) => "n",
+        Some(Piece::Bishop) => "b",
+        Some(Piece::Rook) => "r",
+        Some(Piece::Queen) => "q",
+        _ => ""
+    };
+
+    format!("{}{}{}", sq_to_algebraic(move_from(r#move)), sq_to_algebraic(move_to(r#move)), promotion_suffix)
 }
 
 pub struct MoveList {
