@@ -180,10 +180,7 @@ impl<W> UciHandler<W> where W: Write {
     }
 
     fn eval(&mut self) {
-        writeln!(&mut self.out, "{}", eval(&self.state) * match self.state.to_move {
-            Colour::White => 1,
-            Colour::Black => -1
-        });
+        writeln!(&mut self.out, "{}", eval(&self.state));
     }
 
     fn print(&mut self) {

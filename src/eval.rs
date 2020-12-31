@@ -100,9 +100,13 @@ pub fn eval(state: &State) -> isize {
             }
         }
     }
+    
+    score
+}
 
+pub fn relative_eval(state: &State) -> isize {
     match state.to_move {
-        Colour::White => score,
-        Colour::Black => -1 * score
+        Colour::White => eval(&state),
+        Colour::Black => -1 * eval(&state)
     }
 }
