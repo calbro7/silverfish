@@ -10,6 +10,7 @@ mod uci;
 mod errors;
 mod perft;
 mod eval;
+mod search;
 mod tests;
 use text_io::read;
 

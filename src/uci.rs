@@ -4,6 +4,7 @@ use crate::moves::{move_from, move_to, move_promotion_piece, generate_moves, mov
 use crate::pieces::Piece;
 use crate::perft::perft;
 use crate::eval::eval;
+use crate::search::search;
 use std::process::exit;
 use std::io::{Write};
 
@@ -126,17 +127,8 @@ impl<W> UciHandler<W> where W: Write {
     }
 
     fn go(&mut self, _command: &str) {
-        let mut moves = generate_moves(&self.state);
-        while !moves.is_empty() {
-            let r#move = moves.pop();
-            match self.state.make_move(r#move) {
-                Ok(_) => {
-                    writeln!(&mut self.out, "bestmove {}{}", sq_to_algebraic(move_from(r#move)), sq_to_algebraic(move_to(r#move)));
-                    break;
-                },
-                Err(_) => {}
-            }
-        }
+        let best = search(&mut self.state);
+        writeln!(&mut self.out, "bestmove {}", move_to_algebraic(best.0));
     }
 
     fn uci(&mut self) {
