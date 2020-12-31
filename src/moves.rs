@@ -1,5 +1,5 @@
 use crate::state::State;
-use crate::bitboards::{RANK_1, RANK_4, RANK_5, RANK_8, pop_ls1b, print_bb, get_bit, from_sq};
+use crate::bitboards::{RANK_1, RANK_4, RANK_5, RANK_8, pop_ls1b, get_bit};
 use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::attacks::{pawn_attacks, knight_attacks, bishop_attacks, rook_attacks, queen_attacks, king_attacks};
@@ -13,7 +13,7 @@ pub fn encode_move(from: usize, to: usize, piece: Piece, promotion_piece: Option
 
     encoded |= from as u32;
     encoded |= (to << 6) as u32;
-    encoded |= ((piece as u32) << 12);
+    encoded |= (piece as u32) << 12;
     let promotion_bits = match promotion_piece {
         Some(piece) => piece as u32,
         None => u32::MAX
@@ -34,7 +34,7 @@ pub fn move_to(r#move: BitMove) -> usize {
     ((r#move >> 6) & 63) as usize
 }
 pub fn move_piece(r#move: BitMove) -> Piece {
-    match ((r#move >> 12) & 7) {
+    match (r#move >> 12) & 7 {
         0 => Piece::Pawn,
         1 => Piece::Knight,
         2 => Piece::Bishop,
@@ -45,7 +45,7 @@ pub fn move_piece(r#move: BitMove) -> Piece {
     }
 }
 pub fn move_promotion_piece(r#move: BitMove) -> Option<Piece> {
-    match ((r#move >> 15) & 7) {
+    match (r#move >> 15) & 7 {
         0 => Some(Piece::Pawn),
         1 => Some(Piece::Knight),
         2 => Some(Piece::Bishop),

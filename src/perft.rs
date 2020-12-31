@@ -1,6 +1,5 @@
 use crate::state::State;
-use crate::moves::{generate_moves, move_from, move_to};
-use crate::helpers::sq_to_algebraic;
+use crate::moves::generate_moves;
 
 pub fn perft(state: &mut State, depth: u8) -> u64 {
     if depth == 0 {

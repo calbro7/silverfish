@@ -1,11 +1,9 @@
 use crate::state::State;
 use crate::helpers::{algebraic_to_sq, sq_to_algebraic};
-use crate::moves::{BitMove, encode_move, move_from, move_to, move_promotion_piece, generate_moves, move_to_algebraic};
+use crate::moves::{move_from, move_to, move_promotion_piece, generate_moves, move_to_algebraic};
 use crate::pieces::Piece;
-use crate::colours::Colour;
 use crate::perft::perft;
 use crate::eval::eval;
-use std::str::SplitWhitespace;
 use std::process::exit;
 use std::io::{Write};
 
@@ -66,7 +64,7 @@ impl<W> UciHandler<W> where W: Write {
             Some("startpos") => State::start_pos(),
             Some("fen") => {
                 let mut fen = String::new();
-                for i in 0..6 {
+                for _ in 0..6 {
                     match segments.next() {
                         Some(s) => fen.push_str(&(" ".to_owned() + s)),
                         None => {
@@ -127,7 +125,7 @@ impl<W> UciHandler<W> where W: Write {
         self.state = state;
     }
 
-    fn go(&mut self, command: &str) {
+    fn go(&mut self, _command: &str) {
         let mut moves = generate_moves(&self.state);
         while !moves.is_empty() {
             let r#move = moves.pop();

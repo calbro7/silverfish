@@ -1,4 +1,4 @@
-use crate::bitboards::{NOT_A_FILE, NOT_H_FILE, NOT_AB_FILE, NOT_GH_FILE, from_sq, set_bit, clear_bit, get_bit};
+use crate::bitboards::{NOT_A_FILE, NOT_H_FILE, NOT_AB_FILE, NOT_GH_FILE, from_sq, set_bit, get_bit};
 use crate::colours::Colour;
 use crate::helpers::{sq_rank, sq_file, rank_file_to_sq};
 

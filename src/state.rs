@@ -1,6 +1,6 @@
 use crate::pieces::Piece;
 use crate::colours::Colour;
-use crate::bitboards::{get_bit, set_bit, clear_bit, print_bb, get_ls1b};
+use crate::bitboards::{get_bit, set_bit, clear_bit, get_ls1b};
 use crate::helpers::{rank_file_to_sq, sq_to_algebraic, algebraic_to_sq};
 use crate::castling::{CastleType, decode_castling};
 use crate::attacks::{pawn_attacks,knight_attacks,bishop_attacks,rook_attacks,queen_attacks,king_attacks};
