@@ -19,7 +19,7 @@ pub fn search<W: std::io::Write>(mut state: &mut State, depth: Option<u8>, out: 
         if state.make_move(r#move).is_err() {
             continue;
         }
-        let score = -1 * negamax(&mut state, depth.unwrap_or(default_depth), -1 * MATE_VALUE, MATE_VALUE, &mut node_counter);
+        let score = -1 * negamax(&mut state, depth.unwrap_or(default_depth), -1 * MATE_VALUE, MATE_VALUE, 0, &mut node_counter);
         if score >= best.1 {
             best.0 = r#move;
             best.1 = score;
@@ -39,7 +39,7 @@ pub fn search<W: std::io::Write>(mut state: &mut State, depth: Option<u8>, out: 
     (best.0, absolute_score)
 }
 
-fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, mut node_counter: &mut usize) -> isize {
+fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply: u8, mut node_counter: &mut usize) -> isize {
     *node_counter += 1;
 
     if depth == 0 {
@@ -56,7 +56,7 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, mut 
             continue;
         }
         num_legal_moves += 1;
-        value = max(value, -1*negamax(&mut state, depth-1, -1*beta, -1*alpha, &mut node_counter));
+        value = max(value, -1*negamax(&mut state, depth-1, -1*beta, -1*alpha, ply+1, &mut node_counter));
         *state = copy;
         alpha = max(alpha, value);
         if alpha >= beta {
@@ -68,7 +68,7 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, mut 
         let king_sq = get_ls1b(state.pieces[Piece::King as usize] & state.colours[state.to_move as usize]);
 
         if state.square_attacked(king_sq, !state.to_move) {
-            value = -1 * MATE_VALUE;
+            value = (-1 * MATE_VALUE) + (ply as isize);
         }
         else {
             value = 0;
