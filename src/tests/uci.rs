@@ -1,5 +1,3 @@
-#[cfg(test)]
-
 use crate::uci::UciHandler;
 use crate::state::State;
 
@@ -66,6 +64,19 @@ fn go() {
     uci.command("position fen rnb1kbnr/pppp1ppp/8/4p1qQ/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3");
     uci.command("go");
     assert!(String::from_utf8(output).unwrap().ends_with("bestmove h5g5\n"));
+}
+
+#[test]
+fn go_with_depth() {
+    let mut output = Vec::new();
+    let mut uci = UciHandler::new(&mut output);
+    // The best move will of course depend on the searching and evaluation, but we choose a position for which there is objectively only one standout move (capturing the hanging queen)
+    uci.command("position fen rnb1kbnr/pppp1ppp/8/4p1qQ/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3");
+    uci.command("go depth 4");
+    let output_str = String::from_utf8(output).unwrap();
+    assert!(output_str.contains("depth 4"));
+    assert!(!output_str.contains("depth 5"));
+    assert!(output_str.ends_with("bestmove h5g5\n"));
 }
 
 #[test]

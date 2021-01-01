@@ -3,12 +3,13 @@ use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::bitboards::get_ls1b;
 use crate::eval::relative_eval;
-use crate::moves::{generate_moves, BitMove, move_is_capture, move_from, move_to, move_to_algebraic};
+use crate::moves::{generate_moves, BitMove};
 use std::cmp::max;
 
 const MATE_VALUE: isize = 10000;
 
-pub fn search(mut state: &mut State) -> (BitMove, isize) {
+pub fn search<W: std::io::Write>(mut state: &mut State, depth: Option<u8>, out: Option<&mut W>) -> (BitMove, isize) {
+    let default_depth = 5u8;
     let mut best: (BitMove, isize) = (0, -1 * MATE_VALUE);
     let mut moves = generate_moves(&state);
     let mut node_counter = 0;
@@ -18,7 +19,7 @@ pub fn search(mut state: &mut State) -> (BitMove, isize) {
         if state.make_move(r#move).is_err() {
             continue;
         }
-        let score = -1 * negamax(&mut state, 5, -1 * MATE_VALUE, MATE_VALUE, &mut node_counter);
+        let score = -1 * negamax(&mut state, depth.unwrap_or(default_depth), -1 * MATE_VALUE, MATE_VALUE, &mut node_counter);
         if score >= best.1 {
             best.0 = r#move;
             best.1 = score;
@@ -31,12 +32,14 @@ pub fn search(mut state: &mut State) -> (BitMove, isize) {
         Colour::Black => -1 * best.1
     };
 
-    println!("info depth 6 nodes {} cp {}", node_counter, absolute_score);
+    if out.is_some() {
+        writeln!(out.unwrap(), "info depth {} nodes {} cp {}", depth.unwrap_or(default_depth), node_counter, absolute_score).unwrap();
+    }
 
     (best.0, absolute_score)
 }
 
-fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, mut beta: isize, mut node_counter: &mut usize) -> isize {
+fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, mut node_counter: &mut usize) -> isize {
     *node_counter += 1;
 
     if depth == 0 {

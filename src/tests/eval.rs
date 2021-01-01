@@ -1,5 +1,3 @@
-#[cfg(test)]
-
 use crate::state::State;
 use crate::eval::eval;
 use more_asserts::assert_lt;

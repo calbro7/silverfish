@@ -1,5 +1,5 @@
 use crate::state::State;
-use crate::helpers::{algebraic_to_sq, sq_to_algebraic};
+use crate::helpers::{algebraic_to_sq};
 use crate::moves::{move_from, move_to, move_promotion_piece, generate_moves, move_to_algebraic};
 use crate::pieces::Piece;
 use crate::perft::perft;
@@ -52,7 +52,7 @@ impl<W> UciHandler<W> where W: Write {
     }
 
     fn isready(&mut self) {
-        writeln!(&mut self.out, "readyok");
+        writeln!(&mut self.out, "readyok").unwrap();
     }
 
     fn ucinewgame(&mut self,) {
@@ -87,9 +87,10 @@ impl<W> UciHandler<W> where W: Write {
         };
     
         if let Some("moves") = segments.next() {
-            loop {
+            'moveparsing: loop {
                 match segments.next() {
                     Some(move_string) => {
+                        println!("{}", move_string);
                         if move_string.len() < 4 {
                             return;
                         }
@@ -113,8 +114,15 @@ impl<W> UciHandler<W> where W: Write {
                         while !move_list.is_empty() {
                             let r#move = move_list.pop();
                             if from == move_from(r#move) && to == move_to(r#move) && promotion_piece == move_promotion_piece(r#move) {
-                                state.make_move(r#move);
-                                break;
+                                // If this is a legal move, proceed to parse the next move. Otherwise, stop parsing the moves altogether
+                                match state.make_move(r#move) {
+                                    Ok(_) => {
+                                        break;
+                                    },
+                                    Err(_) => {
+                                        break 'moveparsing;
+                                    }
+                                }
                             }
                         }
                     },
@@ -126,14 +134,28 @@ impl<W> UciHandler<W> where W: Write {
         self.state = state;
     }
 
-    fn go(&mut self, _command: &str) {
-        let best = search(&mut self.state);
-        writeln!(&mut self.out, "bestmove {}", move_to_algebraic(best.0));
+    fn go(&mut self, command: &str) {
+        let mut segments = command.split_whitespace().skip(1);
+
+        let mut depth: Option<u8> = None;
+        loop {
+            match segments.next() {
+                Some("depth") => {
+                    depth = Some(segments.next().unwrap().parse().unwrap())
+                },
+                _ => {
+                    break;
+                }
+            }
+        }
+
+        let best = search(&mut self.state, depth, Some(&mut self.out));
+        writeln!(&mut self.out, "bestmove {}", move_to_algebraic(best.0)).unwrap();
     }
 
     fn uci(&mut self) {
-        writeln!(&mut self.out, "id name silverfish");
-        writeln!(&mut self.out, "uciok");
+        writeln!(&mut self.out, "id name silverfish").unwrap();
+        writeln!(&mut self.out, "uciok").unwrap();
     }
 
     fn quit(&self) {
@@ -160,20 +182,20 @@ impl<W> UciHandler<W> where W: Write {
         let mut total = 0;
         for r#move in legal_moves {
             let copy = self.state.clone();
-            self.state.make_move(r#move);
+            self.state.make_move(r#move).unwrap();
             let n = perft(&mut self.state, depth-1);
             self.state = copy;
             total += n;
-            writeln!(&mut self.out, "{}: {}", move_to_algebraic(r#move), n);
+            writeln!(&mut self.out, "{}: {}", move_to_algebraic(r#move), n).unwrap();
         }
-        writeln!(&mut self.out, "Total: {}", total);
+        writeln!(&mut self.out, "Total: {}", total).unwrap();
     }
 
     fn eval(&mut self) {
-        writeln!(&mut self.out, "{}", eval(&self.state));
+        writeln!(&mut self.out, "{}", eval(&self.state)).unwrap();
     }
 
     fn print(&mut self) {
-        writeln!(&mut self.out, "{}", self.state);
+        writeln!(&mut self.out, "{}", self.state).unwrap();
     }
 }

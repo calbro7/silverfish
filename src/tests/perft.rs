@@ -1,5 +1,3 @@
-#[cfg(test)]
-
 use crate::perft::perft;
 use crate::state::State;
 
