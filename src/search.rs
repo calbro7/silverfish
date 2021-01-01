@@ -4,7 +4,6 @@ use crate::pieces::Piece;
 use crate::bitboards::get_ls1b;
 use crate::eval::relative_eval;
 use crate::moves::{generate_moves, BitMove};
-use std::cmp::max;
 
 const MATE_VALUE: isize = 10000;
 
@@ -46,7 +45,6 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply:
         return relative_eval(state);
     }
 
-    let mut value = -1 * MATE_VALUE;
     let mut moves = generate_moves(&state);
     let mut num_legal_moves = 0;
     while !moves.is_empty() {
@@ -56,11 +54,13 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply:
             continue;
         }
         num_legal_moves += 1;
-        value = max(value, -1*negamax(&mut state, depth-1, -1*beta, -1*alpha, ply+1, &mut node_counter));
+        let score = -1*negamax(&mut state, depth-1, -1*beta, -1*alpha, ply+1, &mut node_counter);
         *state = copy;
-        alpha = max(alpha, value);
-        if alpha >= beta {
-            break;
+        if score >= beta {
+            return beta;
+        }
+        if score > alpha {
+            alpha = score;
         }
     }
 
@@ -68,12 +68,13 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply:
         let king_sq = get_ls1b(state.pieces[Piece::King as usize] & state.colours[state.to_move as usize]);
 
         if state.square_attacked(king_sq, !state.to_move) {
-            value = (-1 * MATE_VALUE) + (ply as isize);
+            (-1 * MATE_VALUE) + (ply as isize)
         }
         else {
-            value = 0;
+            0
         }
     }
-    
-    value
+    else {
+        alpha
+    }
 }
