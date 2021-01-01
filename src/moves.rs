@@ -5,6 +5,7 @@ use crate::pieces::Piece;
 use crate::attacks::{pawn_attacks, knight_attacks, bishop_attacks, rook_attacks, queen_attacks, king_attacks};
 use crate::castling::{CastleType, decode_castling};
 use crate::helpers::sq_to_algebraic;
+use regex::Regex;
 
 pub type BitMove = u32;
 
@@ -78,6 +79,10 @@ pub fn move_to_algebraic(r#move: BitMove) -> String {
     };
 
     format!("{}{}{}", sq_to_algebraic(move_from(r#move)), sq_to_algebraic(move_to(r#move)), promotion_suffix)
+}
+
+pub fn move_string_is_valid(r#move: &str) -> bool {
+    Regex::new(r"^[abcdefgh][12345678][abcdefgh][12345678][nbrq]?$").unwrap().is_match(r#move)
 }
 
 pub struct MoveList {

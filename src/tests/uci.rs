@@ -57,6 +57,15 @@ fn position_startpos_with_moves() {
 }
 
 #[test]
+fn position_with_invalid_moves() {
+    let mut output = Vec::new();
+    let mut uci = UciHandler::new(&mut output);
+    uci.command("position startpos moves e2e4 e7e5 not valid");
+    uci.command("print");
+    assert_eq!(String::from_utf8(output).unwrap(), format!("{}\n", State::from_fen("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2").unwrap()));
+}
+
+#[test]
 fn go() {
     let mut output = Vec::new();
     let mut uci = UciHandler::new(&mut output);

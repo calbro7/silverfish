@@ -1,6 +1,6 @@
 use crate::state::State;
 use crate::helpers::{algebraic_to_sq};
-use crate::moves::{move_from, move_to, move_promotion_piece, generate_moves, move_to_algebraic};
+use crate::moves::{move_from, move_to, move_promotion_piece, generate_moves, move_to_algebraic, move_string_is_valid};
 use crate::pieces::Piece;
 use crate::perft::perft;
 use crate::eval::eval;
@@ -89,12 +89,7 @@ impl<W> UciHandler<W> where W: Write {
         if let Some("moves") = segments.next() {
             'moveparsing: loop {
                 match segments.next() {
-                    Some(move_string) => {
-                        println!("{}", move_string);
-                        if move_string.len() < 4 {
-                            return;
-                        }
-    
+                    Some(move_string) if move_string_is_valid(move_string) => {
                         let mut move_list = generate_moves(&state);
     
                         let from = algebraic_to_sq(&move_string[0..2]);
@@ -126,7 +121,7 @@ impl<W> UciHandler<W> where W: Write {
                             }
                         }
                     },
-                    None => break
+                    _ => break
                 }
             }
         }

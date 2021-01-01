@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 text_io = "0.1.8"
 more-asserts = "0.2.1"
+regex = "1.4.2"
