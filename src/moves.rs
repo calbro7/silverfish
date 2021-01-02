@@ -2,7 +2,7 @@ use crate::state::State;
 use crate::bitboards::{RANK_1, RANK_4, RANK_5, RANK_8, pop_ls1b, get_bit};
 use crate::colours::Colour;
 use crate::pieces::Piece;
-use crate::attacks::{pawn_attacks, knight_attacks, bishop_attacks, rook_attacks, queen_attacks, king_attacks};
+use crate::attacks::{PAWN_ATTACKS, KNIGHT_ATTACKS, bishop_attacks, rook_attacks, queen_attacks, KING_ATTACKS};
 use crate::castling::{CastleType, decode_castling};
 use crate::helpers::sq_to_algebraic;
 use regex::Regex;
@@ -159,7 +159,7 @@ pub fn generate_moves(state: &State) -> MoveList {
         moves.push(encode_move(from, to, Piece::Pawn, None, false, true, false, false));
     }
     if let Some(ep_target) = state.ep_target {
-        let mut ep_capturers = pawn_attacks(ep_target, !state.to_move) & pawns;
+        let mut ep_capturers = PAWN_ATTACKS[ep_target][!state.to_move as usize] & pawns;
         while ep_capturers != 0 {
             let from = pop_ls1b(&mut ep_capturers);
             moves.push(encode_move(from, ep_target, Piece::Pawn, None, true, false, true, false));
@@ -167,7 +167,7 @@ pub fn generate_moves(state: &State) -> MoveList {
     }
     while pawns != 0 {
         let from = pop_ls1b(&mut pawns);
-        let mut attacks = pawn_attacks(from, state.to_move) & them;
+        let mut attacks = PAWN_ATTACKS[from][state.to_move as usize] & them;
         while attacks != 0 {
             let to = pop_ls1b(&mut attacks);
             if get_bit(final_rank, to) {
@@ -185,7 +185,7 @@ pub fn generate_moves(state: &State) -> MoveList {
     let mut knights = state.pieces[Piece::Knight as usize] & us;
     while knights != 0 {
         let from = pop_ls1b(&mut knights);
-        let mut attacks = knight_attacks(from) & !us;
+        let mut attacks = KNIGHT_ATTACKS[from] & !us;
         while attacks != 0 {
             let to = pop_ls1b(&mut attacks);
             let is_capture = get_bit(them, to);
@@ -233,7 +233,7 @@ pub fn generate_moves(state: &State) -> MoveList {
     let mut kings = state.pieces[Piece::King as usize] & us;
     while kings != 0 {
         let from = pop_ls1b(&mut kings);
-        let mut attacks = king_attacks(from) & !us;
+        let mut attacks = KING_ATTACKS[from] & !us;
         while attacks != 0 {
             let to = pop_ls1b(&mut attacks);
             let is_capture = get_bit(them, to);

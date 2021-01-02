@@ -3,7 +3,7 @@ use crate::colours::Colour;
 use crate::bitboards::{get_bit, set_bit, clear_bit, get_ls1b};
 use crate::helpers::{rank_file_to_sq, sq_to_algebraic, algebraic_to_sq};
 use crate::castling::{CastleType, decode_castling};
-use crate::attacks::{pawn_attacks,knight_attacks,bishop_attacks,rook_attacks,queen_attacks,king_attacks};
+use crate::attacks::{PAWN_ATTACKS,KNIGHT_ATTACKS,bishop_attacks,rook_attacks,queen_attacks,KING_ATTACKS};
 use crate::moves::{BitMove, move_from, move_to, move_piece, move_is_capture, move_promotion_piece, move_is_double_push, move_is_ep, move_is_castle};
 use crate::errors::{InvalidFenError, IllegalMoveError};
 use std::fmt;
@@ -110,12 +110,12 @@ impl State {
     pub fn square_attacked(&self, sq: usize, colour: Colour) -> bool {
         let colour_bb = self.colours[colour as usize];
         
-        (pawn_attacks(sq, !colour) & self.pieces[Piece::Pawn as usize] & colour_bb != 0)
-        | (knight_attacks(sq) & self.pieces[Piece::Knight as usize] & colour_bb != 0)
+        (PAWN_ATTACKS[sq][!colour as usize] & self.pieces[Piece::Pawn as usize] & colour_bb != 0)
+        | (KNIGHT_ATTACKS[sq] & self.pieces[Piece::Knight as usize] & colour_bb != 0)
         | (bishop_attacks(sq, self.occupancy) & self.pieces[Piece::Bishop as usize] & colour_bb != 0)
         | (rook_attacks(sq, self.occupancy) & self.pieces[Piece::Rook as usize] & colour_bb != 0)
         | (queen_attacks(sq, self.occupancy) & self.pieces[Piece::Queen as usize] & colour_bb != 0)
-        | (king_attacks(sq) & self.pieces[Piece::King as usize] & colour_bb != 0)
+        | (KING_ATTACKS[sq] & self.pieces[Piece::King as usize] & colour_bb != 0)
     }
 
     pub fn make_move(&mut self, r#move: BitMove) -> Result<(), IllegalMoveError> {
