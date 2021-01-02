@@ -1,5 +1,6 @@
 use crate::uci::UciHandler;
 use crate::state::State;
+use regex::Regex;
 
 #[test]
 fn isready() {
@@ -102,7 +103,8 @@ fn perft() {
     let mut uci = UciHandler::new(&mut output);
     uci.command("position fen k4b1K/4P3/8/8/8/8/8/8 w - - 0 1");
     uci.command("perft 5");
-    assert_eq!(String::from_utf8(output).unwrap(), "e7e8q: 7721\ne7e8r: 4301\ne7e8b: 10851\ne7e8n: 5349\ne7f8q: 4562\ne7f8r: 2506\ne7f8b: 1994\ne7f8n: 1022\nh8h7: 4745\nh8g8: 4616\nTotal: 47667\n");
+    let output_str = String::from_utf8(output).unwrap();
+    assert!(Regex::new(r"^e7e8q: 7721\ne7e8r: 4301\ne7e8b: 10851\ne7e8n: 5349\ne7f8q: 4562\ne7f8r: 2506\ne7f8b: 1994\ne7f8n: 1022\nh8h7: 4745\nh8g8: 4616\nTotal: 47667 (.*)\n$").unwrap().is_match(&output_str));
 }
 
 #[test]

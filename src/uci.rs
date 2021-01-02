@@ -158,6 +158,7 @@ impl<W> UciHandler<W> where W: Write {
     }
 
     fn perft(&mut self, command: &str) {
+        let start = std::time::Instant::now();
         let depth: u8 = command.split_whitespace().skip(1).next().unwrap().parse().unwrap();
         
         // We wish to find all legal moves, sorted by (from, to)
@@ -183,7 +184,8 @@ impl<W> UciHandler<W> where W: Write {
             total += n;
             writeln!(&mut self.out, "{}: {}", move_to_algebraic(r#move), n).unwrap();
         }
-        writeln!(&mut self.out, "Total: {}", total).unwrap();
+
+        writeln!(&mut self.out, "Total: {} ({:.3?})", total, start.elapsed()).unwrap();
     }
 
     fn eval(&mut self) {
