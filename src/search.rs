@@ -65,7 +65,7 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply:
     }
 
     if num_legal_moves == 0 {
-        let king_sq = get_ls1b(state.pieces[Piece::King as usize] & state.colours[state.to_move as usize]);
+        let king_sq = get_ls1b(state.pieces[Piece::King as usize] & state.colours[state.to_move as usize]).unwrap();
 
         if state.square_attacked(king_sq, !state.to_move) {
             (-MATE_VALUE) + (ply as isize)

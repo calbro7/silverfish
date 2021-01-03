@@ -222,7 +222,7 @@ impl State {
             self.halfmove_clock += 1;
         }
 
-        let king_sq = get_ls1b(self.pieces[Piece::King as usize] & self.colours[self.to_move as usize]);
+        let king_sq = get_ls1b(self.pieces[Piece::King as usize] & self.colours[self.to_move as usize]).unwrap();
         if self.square_attacked(king_sq, !self.to_move) {
             *self = copy;
             return Err(IllegalMoveError);

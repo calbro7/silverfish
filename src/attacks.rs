@@ -1,52 +1,47 @@
-use crate::bitboards::{set_bit, get_bit};
-use crate::helpers::{sq_rank, sq_file, rank_file_to_sq};
+use crate::bitboards::{get_ls1b, get_ms1b};
 
 include!(concat!(env!("OUT_DIR"), "/attacks.rs"));
 
 pub fn bishop_attacks(sq: usize, blockers: u64) -> u64 {
     let mut bb = 0u64;
 
-    let mut rank = sq_rank(sq);
-    let mut file = sq_file(sq);
-    while rank < 7 && file < 7 {
-        rank += 1;
-        file += 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+    let northeast = NORTHEAST_RAYS[sq];
+    match get_ls1b(blockers & northeast) {
+        Some(first_blocker) => {
+            bb |= northeast & !NORTHEAST_RAYS[first_blocker];
+        },
+        None => {
+            bb |= northeast;
         }
     }
 
-    rank = sq_rank(sq);
-    file = sq_file(sq);
-    while rank > 0 && file < 7 {
-        rank -= 1;
-        file += 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+    let southeast = SOUTHEAST_RAYS[sq];
+    match get_ms1b(blockers & southeast) {
+        Some(first_blocker) => {
+            bb |= southeast & !SOUTHEAST_RAYS[first_blocker];
+        },
+        None => {
+            bb |= southeast;
         }
     }
 
-    rank = sq_rank(sq);
-    file = sq_file(sq);
-    while rank > 0 && file > 0 {
-        rank -= 1;
-        file -= 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+    let southwest = SOUTHWEST_RAYS[sq];
+    match get_ms1b(blockers & southwest) {
+        Some(first_blocker) => {
+            bb |= southwest & !SOUTHWEST_RAYS[first_blocker];
+        },
+        None => {
+            bb |= southwest;
         }
     }
 
-    rank = sq_rank(sq);
-    file = sq_file(sq);
-    while rank < 7 && file > 0 {
-        rank += 1;
-        file -= 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+    let northwest = NORTHWEST_RAYS[sq];
+    match get_ls1b(blockers & northwest) {
+        Some(first_blocker) => {
+            bb |= northwest & !NORTHWEST_RAYS[first_blocker];
+        },
+        None => {
+            bb |= northwest;
         }
     }
 
@@ -56,43 +51,43 @@ pub fn bishop_attacks(sq: usize, blockers: u64) -> u64 {
 pub fn rook_attacks(sq: usize, blockers: u64) -> u64 {
     let mut bb = 0u64;
 
-    let mut rank = sq_rank(sq);
-    let mut file = sq_file(sq);
-    while rank < 7 {
-        rank += 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+    let north = NORTH_RAYS[sq];
+    match get_ls1b(blockers & north) {
+        Some(first_blocker) => {
+            bb |= north & !NORTH_RAYS[first_blocker];
+        },
+        None => {
+            bb |= north;
         }
     }
-    
-    rank = sq_rank(sq);
-    file = sq_file(sq);
-    while file < 7 {
-        file += 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+
+    let east = EAST_RAYS[sq];
+    match get_ls1b(blockers & east) {
+        Some(first_blocker) => {
+            bb |= east & !EAST_RAYS[first_blocker];
+        },
+        None => {
+            bb |= east;
         }
     }
-    
-    rank = sq_rank(sq);
-    file = sq_file(sq);
-    while rank > 0 {
-        rank -= 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+
+    let south = SOUTH_RAYS[sq];
+    match get_ms1b(blockers & south) {
+        Some(first_blocker) => {
+            bb |= south & !SOUTH_RAYS[first_blocker];
+        },
+        None => {
+            bb |= south;
         }
     }
-    
-    rank = sq_rank(sq);
-    file = sq_file(sq);
-    while file > 0 {
-        file -= 1;
-        bb = set_bit(bb, rank_file_to_sq(rank, file));
-        if get_bit(blockers, rank_file_to_sq(rank, file)) {
-            break
+
+    let west = WEST_RAYS[sq];
+    match get_ms1b(blockers & west) {
+        Some(first_blocker) => {
+            bb |= west & !WEST_RAYS[first_blocker];
+        },
+        None => {
+            bb |= west;
         }
     }
 

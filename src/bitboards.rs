@@ -16,18 +16,28 @@ pub fn count_bits(bb: u64) -> usize {
     bb.count_ones() as usize
 }
 
-pub fn get_ls1b(bb: u64) -> usize {
-    bb.trailing_zeros() as usize
+pub fn get_ls1b(bb: u64) -> Option<usize> {
+    if bb == 0 {
+        None
+    }
+    else {
+        Some(bb.trailing_zeros() as usize)
+    }
+}
+
+pub fn get_ms1b(bb: u64) -> Option<usize> {
+    if bb == 0 {
+        None
+    }
+    else {
+        Some(63 - bb.leading_zeros() as usize)
+    }
 }
 
 pub fn pop_ls1b(bb: &mut u64) -> usize {
-    let sq = get_ls1b(*bb);
+    let sq = get_ls1b(*bb).unwrap();
     *bb = clear_bit(*bb, sq);
     sq
-}
-
-pub fn from_sq(sq: usize) -> u64 {
-    1 << sq
 }
 
 pub const RANK_1: u64 = 0b0000000000000000000000000000000000000000000000000000000011111111;
