@@ -87,14 +87,16 @@ pub fn move_string_is_valid(r#move: &str) -> bool {
 
 pub struct MoveList {
     moves: [BitMove; 255],
-    length: usize
+    length: usize,
+    current: usize
 }
 
 impl MoveList {
     pub fn new() -> Self {
         Self {
             moves: [0; 255],
-            length: 0
+            length: 0,
+            current: 0
         }
     }
 
@@ -103,17 +105,20 @@ impl MoveList {
         self.length += 1;
     }
 
-    pub fn pop(&mut self) -> BitMove {
-        self.length -= 1;
-        self.moves[self.length]
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.length == 0
-    }
-
     pub fn sort(&mut self, state: &State) {
-        self.moves[0..self.length].sort_by(|a,b| score_move(&state, *a).cmp(&score_move(&state, *b)));
+        self.moves[0..self.length].sort_by(|a,b| score_move(&state, *b).cmp(&score_move(&state, *a)));
+    }
+}
+
+impl Iterator for MoveList {
+    type Item = BitMove;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.current += 1;
+        match self.moves[self.current - 1] {
+            0 => None,
+            m => Some(m)
+        }
     }
 }
 

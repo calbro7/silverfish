@@ -8,9 +8,8 @@ pub fn perft(state: &mut State, depth: u8) -> u64 {
 
     let mut count = 0u64;
     let mut moves = generate_moves(&state);
-    while !moves.is_empty() {
+    while let Some(r#move) = moves.next() {
         let copy = state.clone();
-        let r#move = moves.pop();
         if state.make_move(r#move).is_err() {
             continue;
         }

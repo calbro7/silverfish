@@ -106,8 +106,7 @@ impl<W> UciHandler<W> where W: Write {
                             }
                         } else { None };
     
-                        while !move_list.is_empty() {
-                            let r#move = move_list.pop();
+                        while let Some(r#move) = move_list.next() {
                             if from == move_from(r#move) && to == move_to(r#move) && promotion_piece == move_promotion_piece(r#move) {
                                 // If this is a legal move, proceed to parse the next move. Otherwise, stop parsing the moves altogether
                                 match state.make_move(r#move) {
@@ -161,11 +160,10 @@ impl<W> UciHandler<W> where W: Write {
         let start = std::time::Instant::now();
         let depth: u8 = command.split_whitespace().skip(1).next().unwrap().parse().unwrap();
         
-        // We wish to find all legal moves, sorted by (from, to)
+        // We wish to find all legal moves, sorted by (from, to) (with promotion piece in desc order, if applicable)
         let mut moves = generate_moves(&self.state);
         let mut legal_moves = Vec::new();
-        while !moves.is_empty() {
-            let r#move = moves.pop();
+        while let Some(r#move) = moves.next() {
             let copy = self.state.clone();
             if self.state.make_move(r#move).is_err() {
                 continue;
@@ -173,7 +171,10 @@ impl<W> UciHandler<W> where W: Write {
             legal_moves.push(r#move);
             self.state = copy;
         }
-        legal_moves.sort_by(|m1,m2| (move_from(*m1), move_to(*m1)).cmp(&(move_from(*m2), move_to(*m2))));
+        legal_moves.sort_by(|m1,m2| match move_promotion_piece(*m1) {
+            Some(p) => (move_from(*m1), move_to(*m1), -(p as isize)).cmp(&(move_from(*m2), move_to(*m2), -(move_promotion_piece(*m2).unwrap() as isize))),
+            None => (move_from(*m1), move_to(*m1)).cmp(&(move_from(*m2), move_to(*m2)))
+        });
         
         let mut total = 0;
         for r#move in legal_moves {

@@ -12,8 +12,7 @@ pub fn search<W: std::io::Write>(mut state: &mut State, depth: Option<u8>, out: 
     let mut best: (BitMove, isize) = (0, -MATE_VALUE);
     let mut moves = generate_moves(&state);
     let mut node_counter = 0;
-    while !moves.is_empty() {
-        let r#move = moves.pop();
+    while let Some(r#move) = moves.next() {
         let copy = state.clone();
         if state.make_move(r#move).is_err() {
             continue;
@@ -48,8 +47,7 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply:
     let mut moves = generate_moves(&state);
     moves.sort(&state);
     let mut num_legal_moves = 0;
-    while !moves.is_empty() {
-        let r#move = moves.pop();
+    while let Some(r#move) = moves.next() {
         let copy = state.clone();
         if state.make_move(r#move).is_err() {
             continue;
@@ -93,8 +91,7 @@ fn quiescence(mut state: &mut State, mut alpha: isize, beta: isize, mut node_cou
 
     let mut moves = generate_moves(&state);
     moves.sort(&state);
-    while !moves.is_empty() {
-        let r#move = moves.pop();
+    while let Some(r#move) = moves.next() {
         if !move_is_capture(r#move) {
             continue;
         }
