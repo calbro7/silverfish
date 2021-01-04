@@ -18,7 +18,7 @@ pub fn search<W: std::io::Write>(mut state: &mut State, depth: Option<u8>, out: 
         if state.make_move(r#move).is_err() {
             continue;
         }
-        let score = -negamax(&mut state, depth.unwrap_or(default_depth), -MATE_VALUE, MATE_VALUE, 0, &mut node_counter);
+        let score = -negamax(&mut state, depth.unwrap_or(default_depth)-1, -MATE_VALUE, MATE_VALUE, 0, &mut node_counter);
         if score >= best.1 {
             best.0 = r#move;
             best.1 = score;
