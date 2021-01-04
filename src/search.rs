@@ -3,7 +3,7 @@ use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::bitboards::get_ls1b;
 use crate::eval::relative_eval;
-use crate::moves::{generate_moves, BitMove};
+use crate::moves::{generate_moves, BitMove, move_is_capture};
 
 const MATE_VALUE: isize = 10000;
 
@@ -39,13 +39,14 @@ pub fn search<W: std::io::Write>(mut state: &mut State, depth: Option<u8>, out: 
 }
 
 fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply: u8, mut node_counter: &mut usize) -> isize {
-    *node_counter += 1;
-
     if depth == 0 {
-        return relative_eval(state);
+        return quiescence(state, alpha, beta, &mut node_counter);
     }
 
+    *node_counter += 1;
+
     let mut moves = generate_moves(&state);
+    moves.sort(&state);
     let mut num_legal_moves = 0;
     while !moves.is_empty() {
         let r#move = moves.pop();
@@ -77,4 +78,40 @@ fn negamax(mut state: &mut State, depth: u8, mut alpha: isize, beta: isize, ply:
     else {
         alpha
     }
+}
+
+fn quiescence(mut state: &mut State, mut alpha: isize, beta: isize, mut node_counter: &mut usize) -> isize {
+    *node_counter += 1;
+
+    let standing_pat = relative_eval(&state);
+    if standing_pat >= beta {
+        return beta;
+    }
+    if standing_pat > alpha {
+        alpha = standing_pat;
+    }
+
+    let mut moves = generate_moves(&state);
+    moves.sort(&state);
+    while !moves.is_empty() {
+        let r#move = moves.pop();
+        if !move_is_capture(r#move) {
+            continue;
+        }
+        let copy = state.clone();
+        if state.make_move(r#move).is_err() {
+            continue;
+        }
+        let score = -quiescence(&mut state, -beta, -alpha, &mut node_counter);
+        *state = copy;
+
+        if score >= beta {
+            return beta;
+        }
+        if score > alpha {
+            alpha = score;
+        }
+    }
+
+    alpha
 }
