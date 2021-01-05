@@ -1,9 +1,9 @@
 use crate::state::State;
 use crate::colours::Colour;
 use crate::pieces::Piece;
-use crate::bitboards::get_ls1b;
+use crate::bitboards::{get_ls1b, get_bit};
 use crate::eval::relative_eval;
-use crate::moves::{generate_moves, BitMove, move_is_capture};
+use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_to, MoveList};
 
 const MATE_VALUE: isize = 10000;
 
@@ -35,7 +35,7 @@ impl<'a> Search<'a> {
 
     pub fn go(&mut self) -> (BitMove, isize) {
         let mut moves = generate_moves(&self.state);
-        moves.sort(&self.state);
+        self.sort_moves(&mut moves);
 
         while let Some(r#move) = moves.next() {
             let copy = self.state.clone();
@@ -70,7 +70,7 @@ impl<'a> Search<'a> {
         self.node_counter += 1;
 
         let mut moves = generate_moves(&self.state);
-        moves.sort(&self.state);
+        self.sort_moves(&mut moves);
         let mut num_legal_moves = 0;
         while let Some(r#move) = moves.next() {
             let copy = self.state.clone();
@@ -114,7 +114,7 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = generate_moves(&self.state);
-        moves.sort(&self.state);
+        self.sort_moves(&mut moves);
         while let Some(r#move) = moves.next() {
             if !move_is_capture(r#move) {
                 continue;
@@ -134,5 +134,28 @@ impl<'a> Search<'a> {
         }
 
         alpha
+    }
+
+    fn sort_moves(&self, move_list: &mut MoveList) {
+        move_list.moves[0..move_list.length].sort_by(|a,b| self.score_move(*b).cmp(&self.score_move(*a)));
+    }
+
+    fn score_move(&self, r#move: BitMove) -> usize {
+        if move_is_capture(r#move) {
+            let mut captured_piece = Piece::Pawn;
+            if !move_is_ep(r#move) {
+                // todo - is it quicker to add pawns to the start of this list? (extra iteration, but most captures will be of pawns)
+                for piece in &[Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen, Piece::King] {
+                    if get_bit(self.state.pieces[*piece as usize], move_to(r#move)) {
+                        captured_piece = *piece;
+                        break;
+                    }
+                }
+            }
+    
+            return 6 * (captured_piece as usize) + (5 - move_piece(r#move) as usize);
+        }
+        
+        0
     }
 }

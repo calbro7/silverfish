@@ -86,8 +86,8 @@ pub fn move_string_is_valid(r#move: &str) -> bool {
 }
 
 pub struct MoveList {
-    moves: [BitMove; 255],
-    length: usize,
+    pub moves: [BitMove; 255],
+    pub length: usize,
     current: usize
 }
 
@@ -103,10 +103,6 @@ impl MoveList {
     pub fn push(&mut self, r#move: BitMove) {
         self.moves[self.length] = r#move;
         self.length += 1;
-    }
-
-    pub fn sort(&mut self, state: &State) {
-        self.moves[0..self.length].sort_by(|a,b| score_move(&state, *b).cmp(&score_move(&state, *a)));
     }
 }
 
@@ -271,23 +267,4 @@ pub fn generate_moves(state: &State) -> MoveList {
     }
 
     moves
-}
-
-fn score_move(state: &State, r#move: BitMove) -> usize {
-    if move_is_capture(r#move) {
-        let mut captured_piece = Piece::Pawn;
-        if !move_is_ep(r#move) {
-            // todo - is it quicker to add pawns to the start of this list? (extra iteration, but most captures will be of pawns)
-            for piece in &[Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen, Piece::King] {
-                if get_bit(state.pieces[*piece as usize], move_to(r#move)) {
-                    captured_piece = *piece;
-                    break;
-                }
-            }
-        }
-
-        return 6 * (captured_piece as usize) + (5 - move_piece(r#move) as usize);
-    }
-    
-    0
 }
