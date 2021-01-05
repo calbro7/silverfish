@@ -15,7 +15,8 @@ mod tests;
 use text_io::read;
 
 fn main() {
-    let mut uci = uci::UciHandler::new(std::io::stdout());
+    let mut out = std::io::stdout();
+    let mut uci = uci::UciHandler::new(&mut out);
 
     loop {
         let input: String = read!("{}\n");

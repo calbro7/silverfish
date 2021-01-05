@@ -8,7 +8,7 @@ use crate::moves::{BitMove, move_from, move_to, move_piece, move_is_capture, mov
 use crate::errors::{InvalidFenError, IllegalMoveError};
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct State {
     pub pieces: [u64; 6],
     pub colours: [u64; 2],

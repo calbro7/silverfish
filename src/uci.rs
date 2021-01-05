@@ -4,17 +4,16 @@ use crate::moves::{move_from, move_to, move_promotion_piece, generate_moves, mov
 use crate::pieces::Piece;
 use crate::perft::perft;
 use crate::eval::eval;
-use crate::search::search;
+use crate::search::Search;
 use std::process::exit;
-use std::io::{Write};
 
-pub struct UciHandler<W: Write> {
+pub struct UciHandler<'a> {
     state: State,
-    out: W
+    out: &'a mut dyn std::io::Write
 }
 
-impl<W> UciHandler<W> where W: Write {
-    pub fn new(out: W) -> Self {
+impl<'a> UciHandler<'a> {
+    pub fn new(out: &'a mut dyn std::io::Write) -> Self {
         Self {
             state: State::start_pos(),
             out: out
@@ -52,7 +51,7 @@ impl<W> UciHandler<W> where W: Write {
     }
 
     fn isready(&mut self) {
-        writeln!(&mut self.out, "readyok").unwrap();
+        writeln!(self.out, "readyok").unwrap();
     }
 
     fn ucinewgame(&mut self,) {
@@ -129,6 +128,9 @@ impl<W> UciHandler<W> where W: Write {
     }
 
     fn go(&mut self, command: &str) {
+        let mut searcher = Search::new(self.state);
+        searcher.set_out(Some(self.out));
+
         let mut segments = command.split_whitespace().skip(1);
 
         let mut depth: Option<u8> = None;
@@ -142,14 +144,17 @@ impl<W> UciHandler<W> where W: Write {
                 }
             }
         }
+        if depth.is_some() {
+            searcher.set_depth(depth.unwrap());
+        }
 
-        let best = search(&mut self.state, depth, Some(&mut self.out));
-        writeln!(&mut self.out, "bestmove {}", move_to_algebraic(best.0)).unwrap();
+        let best = searcher.go();
+        writeln!(self.out, "bestmove {}", move_to_algebraic(best.0)).unwrap();
     }
 
     fn uci(&mut self) {
-        writeln!(&mut self.out, "id name silverfish").unwrap();
-        writeln!(&mut self.out, "uciok").unwrap();
+        writeln!(self.out, "id name silverfish").unwrap();
+        writeln!(self.out, "uciok").unwrap();
     }
 
     fn quit(&self) {
@@ -183,17 +188,17 @@ impl<W> UciHandler<W> where W: Write {
             let n = perft(&mut self.state, depth-1);
             self.state = copy;
             total += n;
-            writeln!(&mut self.out, "{}: {}", move_to_algebraic(r#move), n).unwrap();
+            writeln!(self.out, "{}: {}", move_to_algebraic(r#move), n).unwrap();
         }
 
-        writeln!(&mut self.out, "Total: {} ({:.3?})", total, start.elapsed()).unwrap();
+        writeln!(self.out, "Total: {} ({:.3?})", total, start.elapsed()).unwrap();
     }
 
     fn eval(&mut self) {
-        writeln!(&mut self.out, "{}", eval(&self.state)).unwrap();
+        writeln!(self.out, "{}", eval(&self.state)).unwrap();
     }
 
     fn print(&mut self) {
-        writeln!(&mut self.out, "{}", self.state).unwrap();
+        writeln!(self.out, "{}", self.state).unwrap();
     }
 }
