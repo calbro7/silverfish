@@ -12,6 +12,7 @@ pub struct Search<'a> {
     depth: u8,
     node_counter: usize,
     best: (BitMove, isize),
+    killers: [[BitMove; 2]; 64],
     out: Option<&'a mut dyn std::io::Write>
 }
 
@@ -22,6 +23,7 @@ impl<'a> Search<'a> {
             depth: 5,
             node_counter: 0,
             best: (0, -MATE_VALUE),
+            killers: [[0; 2]; 64],
             out: None
         }
     }
@@ -35,7 +37,7 @@ impl<'a> Search<'a> {
 
     pub fn go(&mut self) -> (BitMove, isize) {
         let mut moves = generate_moves(&self.state);
-        self.sort_moves(&mut moves);
+        self.sort_moves(&mut moves, [0, 0]);
 
         while let Some(r#move) = moves.next() {
             let copy = self.state.clone();
@@ -64,13 +66,13 @@ impl<'a> Search<'a> {
 
     fn negamax(&mut self, mut alpha: isize, beta: isize, depth: u8, current_ply: u8) -> isize {
         if depth == 0 {
-            return self.quiescence(alpha, beta);
+            return self.quiescence(alpha, beta, current_ply);
         }
 
         self.node_counter += 1;
 
         let mut moves = generate_moves(&self.state);
-        self.sort_moves(&mut moves);
+        self.sort_moves(&mut moves, self.killers[current_ply as usize]);
         let mut num_legal_moves = 0;
         while let Some(r#move) = moves.next() {
             let copy = self.state.clone();
@@ -81,6 +83,11 @@ impl<'a> Search<'a> {
             let score = -self.negamax(-beta, -alpha, depth-1, current_ply+1);
             self.state = copy;
             if score >= beta {
+                if !move_is_capture(r#move) {
+                    self.killers[current_ply as usize][1] = self.killers[current_ply as usize][0];
+                    self.killers[current_ply as usize][0] = r#move;
+                }
+
                 return beta;
             }
             if score > alpha {
@@ -102,7 +109,7 @@ impl<'a> Search<'a> {
         alpha
     }
 
-    fn quiescence(&mut self, mut alpha: isize, beta: isize) -> isize {
+    fn quiescence(&mut self, mut alpha: isize, beta: isize, current_ply: u8) -> isize {
         self.node_counter += 1;
 
         let standing_pat = relative_eval(&self.state);
@@ -114,7 +121,7 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = generate_moves(&self.state);
-        self.sort_moves(&mut moves);
+        self.sort_moves(&mut moves, self.killers[current_ply as usize]);
         while let Some(r#move) = moves.next() {
             if !move_is_capture(r#move) {
                 continue;
@@ -123,9 +130,14 @@ impl<'a> Search<'a> {
             if self.state.make_move(r#move).is_err() {
                 continue;
             }
-            let score = -self.quiescence(-beta, -alpha);
+            let score = -self.quiescence(-beta, -alpha, current_ply+1);
             self.state = copy;
             if score >= beta {
+                if !move_is_capture(r#move) {
+                    self.killers[current_ply as usize][1] = self.killers[current_ply as usize][0];
+                    self.killers[current_ply as usize][0] = r#move;
+                }
+                
                 return beta;
             }
             if score > alpha {
@@ -136,11 +148,11 @@ impl<'a> Search<'a> {
         alpha
     }
 
-    fn sort_moves(&self, move_list: &mut MoveList) {
-        move_list.moves[0..move_list.length].sort_by(|a,b| self.score_move(*b).cmp(&self.score_move(*a)));
+    fn sort_moves(&self, move_list: &mut MoveList, killers: [BitMove; 2]) {
+        move_list.moves[0..move_list.length].sort_by(|a,b| self.score_move(*b, killers).cmp(&self.score_move(*a, killers)));
     }
 
-    fn score_move(&self, r#move: BitMove) -> usize {
+    fn score_move(&self, r#move: BitMove, killers: [BitMove; 2]) -> usize {
         if move_is_capture(r#move) {
             let mut captured_piece = Piece::Pawn;
             if !move_is_ep(r#move) {
@@ -153,7 +165,13 @@ impl<'a> Search<'a> {
                 }
             }
     
-            return 6 * (captured_piece as usize) + (5 - move_piece(r#move) as usize);
+            return 6 * (captured_piece as usize) + (5 - move_piece(r#move) as usize) + 10000;
+        }
+        else if killers[0] == r#move {
+            return 9000;
+        }
+        else if killers[1] == r#move {
+            return 8000;
         }
         
         0
