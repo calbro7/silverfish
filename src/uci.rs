@@ -1,11 +1,13 @@
 use crate::state::State;
 use crate::helpers::{algebraic_to_sq};
 use crate::moves::{move_from, move_to, move_promotion_piece, generate_moves, move_to_algebraic, move_string_is_valid};
+use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::perft::perft;
 use crate::eval::eval;
 use crate::search::Search;
 use std::process::exit;
+use std::time::Duration;
 
 pub struct UciHandler<'a> {
     state: State,
@@ -132,20 +134,24 @@ impl<'a> UciHandler<'a> {
         searcher.set_out(Some(self.out));
 
         let mut segments = command.split_whitespace().skip(1);
-
-        let mut depth: Option<u8> = None;
         loop {
             match segments.next() {
                 Some("depth") => {
-                    depth = Some(segments.next().unwrap().parse().unwrap())
+                    searcher.set_depth(segments.next().unwrap().parse().unwrap());
+                },
+                Some("movetime") => {
+                    searcher.set_search_duration(Some(Duration::from_millis(segments.next().unwrap().parse().unwrap())));
+                },
+                Some("wtime") => {
+                    searcher.set_time(Colour::White, Some(Duration::from_millis(segments.next().unwrap().parse().unwrap())));
+                },
+                Some("btime") => {
+                    searcher.set_time(Colour::Black, Some(Duration::from_millis(segments.next().unwrap().parse().unwrap())));
                 },
                 _ => {
                     break;
                 }
             }
-        }
-        if depth.is_some() {
-            searcher.set_depth(depth.unwrap());
         }
 
         let best = searcher.go();

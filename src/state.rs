@@ -118,6 +118,12 @@ impl State {
         | (KING_ATTACKS[sq] & self.pieces[Piece::King as usize] & colour_bb != 0)
     }
 
+    pub fn is_in_check(&self, colour: Colour) -> bool {
+        let king_sq = get_ls1b(self.colours[colour as usize] & self.pieces[Piece::King as usize]).unwrap();
+
+        self.square_attacked(king_sq, !colour)
+    }
+
     pub fn make_move(&mut self, r#move: BitMove) -> Result<(), IllegalMoveError> {
         let copy = self.clone();
 
@@ -222,8 +228,7 @@ impl State {
             self.halfmove_clock += 1;
         }
 
-        let king_sq = get_ls1b(self.pieces[Piece::King as usize] & self.colours[self.to_move as usize]).unwrap();
-        if self.square_attacked(king_sq, !self.to_move) {
+        if self.is_in_check(self.to_move) {
             *self = copy;
             return Err(IllegalMoveError);
         }

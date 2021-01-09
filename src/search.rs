@@ -1,15 +1,19 @@
 use crate::state::State;
 use crate::colours::Colour;
 use crate::pieces::Piece;
-use crate::bitboards::{get_ls1b, get_bit};
+use crate::bitboards::{get_bit};
 use crate::eval::relative_eval;
-use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_to, MoveList};
+use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_to, MoveList, move_to_algebraic};
+use std::time::{Duration, Instant};
 
 const MATE_VALUE: isize = 10000;
 
 pub struct Search<'a> {
     state: State,
     depth: u8,
+    times: [Option<Duration>; 2],
+    search_start: Instant,
+    search_duration: Option<Duration>,
     node_counter: usize,
     best: (BitMove, isize),
     killers: [[BitMove; 2]; 64],
@@ -20,7 +24,10 @@ impl<'a> Search<'a> {
     pub fn new(state: State) -> Self {
         Self {
             state,
-            depth: 5,
+            depth: u8::MAX,
+            times: [None; 2],
+            search_start: Instant::now(),
+            search_duration: None,
             node_counter: 0,
             best: (0, -MATE_VALUE),
             killers: [[0; 2]; 64],
@@ -31,45 +38,81 @@ impl<'a> Search<'a> {
     pub fn set_depth(&mut self, depth: u8) {
         self.depth = depth;
     }
+    pub fn set_time(&mut self, colour: Colour, time: Option<Duration>) {
+        self.times[colour as usize] = time;
+    }
+    pub fn set_search_duration(&mut self, duration: Option<Duration>) {
+        self.search_duration = duration;
+    }
     pub fn set_out(&mut self, out: Option<&'a mut dyn std::io::Write>) {
         self.out = out;
     }
 
-    pub fn go(&mut self) -> (BitMove, isize) {
-        let mut moves = generate_moves(&self.state);
-        self.sort_moves(&mut moves, [0, 0]);
+    pub fn go(mut self) -> (BitMove, isize) {
+        self.search_start = Instant::now();
+        if self.search_duration.is_none() {
+            if let Some(duration) = self.times[self.state.to_move as usize] {
+                self.search_duration = Some(Duration::from_nanos(duration.as_nanos() as u64 / 20));
+            }
+        }
+        
+        for depth in 1..=self.depth {
+            let mut best = (0, -MATE_VALUE);
 
-        while let Some(r#move) = moves.next() {
-            let copy = self.state.clone();
-            if self.state.make_move(r#move).is_err() {
-                continue;
+            let mut moves = generate_moves(&self.state);
+            self.sort_moves(&mut moves, [0, 0]);
+    
+            while let Some(r#move) = moves.next() {
+                let copy = self.state.clone();
+                if self.state.make_move(r#move).is_err() {
+                    continue;
+                }
+                let score = -self.negamax(-MATE_VALUE, MATE_VALUE, depth-1, 1);
+                if score >= best.1 {
+                    best.0 = r#move;
+                    best.1 = score;
+                }
+                self.state = copy;
             }
-            let score = -self.negamax(-MATE_VALUE, MATE_VALUE, self.depth-1, 1);
-            if score >= self.best.1 {
-                self.best.0 = r#move;
-                self.best.1 = score;
+
+            if let Some(duration) = self.search_duration {
+                if depth > 1 && Instant::now().duration_since(self.search_start) > duration {
+                    break;
+                }
             }
-            self.state = copy;
+
+            self.best = best;
+    
+            if let Some(out) = &mut self.out {
+                writeln!(out, "info depth {} nodes {} bestmove {} cp {}", depth, self.node_counter, move_to_algebraic(best.0), match self.state.to_move {
+                    Colour::White => self.best.1,
+                    Colour::Black => -self.best.1
+                }).unwrap();
+            }
         }
 
-        let absolute_score = match self.state.to_move {
+        (self.best.0, match self.state.to_move {
             Colour::White => self.best.1,
             Colour::Black => -self.best.1
-        };
-
-        if let Some(out) = &mut self.out {
-            writeln!(out, "info depth {} nodes {} cp {}", self.depth, self.node_counter, absolute_score).unwrap();
-        }
-
-        (self.best.0, absolute_score)
+        })
     }
 
-    fn negamax(&mut self, mut alpha: isize, beta: isize, depth: u8, current_ply: u8) -> isize {
+    fn negamax(&mut self, mut alpha: isize, beta: isize, mut depth: u8, current_ply: u8) -> isize {
+        if let Some(duration) = self.search_duration {
+            if self.node_counter % 2048 == 0 && Instant::now().duration_since(self.search_start) > duration {
+                return alpha;
+            }
+        }
+
         if depth == 0 {
             return self.quiescence(alpha, beta, current_ply);
         }
 
         self.node_counter += 1;
+
+        if self.state.is_in_check(self.state.to_move) {
+            depth += 1;
+        }
 
         let mut moves = generate_moves(&self.state);
         self.sort_moves(&mut moves, self.killers[current_ply as usize]);
@@ -96,9 +139,7 @@ impl<'a> Search<'a> {
         }
 
         if num_legal_moves == 0 {
-            let king_sq = get_ls1b(self.state.pieces[Piece::King as usize] & self.state.colours[self.state.to_move as usize]).unwrap();
-
-            if self.state.square_attacked(king_sq, !self.state.to_move) {
+            if self.state.is_in_check(self.state.to_move) {
                 return -MATE_VALUE + (current_ply as isize);
             }
             else {
@@ -110,6 +151,12 @@ impl<'a> Search<'a> {
     }
 
     fn quiescence(&mut self, mut alpha: isize, beta: isize, current_ply: u8) -> isize {
+        if let Some(duration) = self.search_duration {
+            if self.node_counter % 2048 == 0 && Instant::now().duration_since(self.search_start) > duration {
+                return alpha;
+            }
+        }
+
         self.node_counter += 1;
 
         let standing_pat = relative_eval(&self.state);
