@@ -1,6 +1,6 @@
 [package]
 name = "silverfish"
-version = "1.0.0"
+version = "2.0.0"
 authors = ["Callum Browne <callum@callumbrowne.me>"]
 edition = "2018"
 

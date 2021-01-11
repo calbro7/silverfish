@@ -3,20 +3,21 @@ use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::bitboards::{get_bit};
 use crate::eval::relative_eval;
-use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_to, MoveList, move_to_algebraic};
+use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_from, move_to, MoveList, move_to_algebraic};
 use std::time::{Duration, Instant};
 
 const MATE_VALUE: isize = 10000;
 
 pub struct Search<'a> {
     state: State,
-    depth: u8,
+    depth: usize,
     times: [Option<Duration>; 2],
     search_start: Instant,
     search_duration: Option<Duration>,
     node_counter: usize,
     best: (BitMove, isize),
     killers: [[BitMove; 2]; 64],
+    history: [[[usize; 64]; 64]; 2],
     out: Option<&'a mut dyn std::io::Write>
 }
 
@@ -24,18 +25,19 @@ impl<'a> Search<'a> {
     pub fn new(state: State) -> Self {
         Self {
             state,
-            depth: u8::MAX,
+            depth: usize::MAX,
             times: [None; 2],
             search_start: Instant::now(),
             search_duration: None,
             node_counter: 0,
             best: (0, -MATE_VALUE),
             killers: [[0; 2]; 64],
+            history: [[[0; 64]; 64]; 2],
             out: None
         }
     }
 
-    pub fn set_depth(&mut self, depth: u8) {
+    pub fn set_depth(&mut self, depth: usize) {
         self.depth = depth;
     }
     pub fn set_time(&mut self, colour: Colour, time: Option<Duration>) {
@@ -97,7 +99,7 @@ impl<'a> Search<'a> {
         })
     }
 
-    fn negamax(&mut self, mut alpha: isize, beta: isize, mut depth: u8, current_ply: u8) -> isize {
+    fn negamax(&mut self, mut alpha: isize, beta: isize, mut depth: usize, current_ply: usize) -> isize {
         if let Some(duration) = self.search_duration {
             if self.node_counter % 2048 == 0 && Instant::now().duration_since(self.search_start) > duration {
                 return alpha;
@@ -115,7 +117,7 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = generate_moves(&self.state);
-        self.sort_moves(&mut moves, self.killers[current_ply as usize]);
+        self.sort_moves(&mut moves, self.killers[current_ply]);
         let mut num_legal_moves = 0;
         while let Some(r#move) = moves.next() {
             let copy = self.state.clone();
@@ -127,13 +129,17 @@ impl<'a> Search<'a> {
             self.state = copy;
             if score >= beta {
                 if !move_is_capture(r#move) {
-                    self.killers[current_ply as usize][1] = self.killers[current_ply as usize][0];
-                    self.killers[current_ply as usize][0] = r#move;
+                    self.killers[current_ply][1] = self.killers[current_ply][0];
+                    self.killers[current_ply][0] = r#move;
                 }
 
                 return beta;
             }
             if score > alpha {
+                if !move_is_capture(r#move) {
+                    self.history[self.state.to_move as usize][move_from(r#move)][move_to(r#move)] += depth;
+                }
+
                 alpha = score;
             }
         }
@@ -150,7 +156,7 @@ impl<'a> Search<'a> {
         alpha
     }
 
-    fn quiescence(&mut self, mut alpha: isize, beta: isize, current_ply: u8) -> isize {
+    fn quiescence(&mut self, mut alpha: isize, beta: isize, current_ply: usize) -> isize {
         if let Some(duration) = self.search_duration {
             if self.node_counter % 2048 == 0 && Instant::now().duration_since(self.search_start) > duration {
                 return alpha;
@@ -168,7 +174,7 @@ impl<'a> Search<'a> {
         }
 
         let mut moves = generate_moves(&self.state);
-        self.sort_moves(&mut moves, self.killers[current_ply as usize]);
+        self.sort_moves(&mut moves, self.killers[current_ply]);
         while let Some(r#move) = moves.next() {
             if !move_is_capture(r#move) {
                 continue;
@@ -180,11 +186,6 @@ impl<'a> Search<'a> {
             let score = -self.quiescence(-beta, -alpha, current_ply+1);
             self.state = copy;
             if score >= beta {
-                if !move_is_capture(r#move) {
-                    self.killers[current_ply as usize][1] = self.killers[current_ply as usize][0];
-                    self.killers[current_ply as usize][0] = r#move;
-                }
-                
                 return beta;
             }
             if score > alpha {
@@ -221,6 +222,6 @@ impl<'a> Search<'a> {
             return 8000;
         }
         
-        0
+        self.history[self.state.to_move as usize][move_from(r#move)][move_to(r#move)]
     }
 }
