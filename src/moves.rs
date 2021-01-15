@@ -70,6 +70,10 @@ pub fn move_is_castle(r#move: BitMove) -> bool {
 }
 
 pub fn move_to_algebraic(r#move: BitMove) -> String {
+    if r#move == 0 {
+        return "null".to_string();
+    }
+
     let promotion_suffix = match move_promotion_piece(r#move) {
         Some(Piece::Knight) => "n",
         Some(Piece::Bishop) => "b",

@@ -3,25 +3,33 @@ use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::bitboards::{get_bit};
 use crate::eval::relative_eval;
-use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_from, move_to, MoveList, move_to_algebraic};
+use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_from, move_to, MoveList};
 use std::time::{Duration, Instant};
+use std::sync::mpsc::{Sender, Receiver};
 
 const MATE_VALUE: isize = 10000;
 
-pub struct Search<'a> {
+pub enum Message {
+    Info(usize, usize, BitMove, isize),
+    Done,
+    Stop
+}
+
+pub struct Search {
     state: State,
     depth: usize,
     times: [Option<Duration>; 2],
     search_start: Instant,
     search_duration: Option<Duration>,
+    search_active: bool,
     node_counter: usize,
     best: (BitMove, isize),
     killers: [[BitMove; 2]; 64],
     history: [[[usize; 64]; 64]; 2],
-    out: Option<&'a mut dyn std::io::Write>
+    channels: Option<(Sender<Message>, Receiver<Message>)>
 }
 
-impl<'a> Search<'a> {
+impl Search {
     pub fn new(state: State) -> Self {
         Self {
             state,
@@ -29,11 +37,12 @@ impl<'a> Search<'a> {
             times: [None; 2],
             search_start: Instant::now(),
             search_duration: None,
+            search_active: false,
             node_counter: 0,
             best: (0, -MATE_VALUE),
             killers: [[0; 2]; 64],
             history: [[[0; 64]; 64]; 2],
-            out: None
+            channels: None
         }
     }
 
@@ -46,8 +55,8 @@ impl<'a> Search<'a> {
     pub fn set_search_duration(&mut self, duration: Option<Duration>) {
         self.search_duration = duration;
     }
-    pub fn set_out(&mut self, out: Option<&'a mut dyn std::io::Write>) {
-        self.out = out;
+    pub fn set_channels(&mut self, channels: Option<(Sender<Message>, Receiver<Message>)>) {
+        self.channels = channels;
     }
 
     pub fn go(mut self) -> (BitMove, isize) {
@@ -57,6 +66,7 @@ impl<'a> Search<'a> {
                 self.search_duration = Some(Duration::from_nanos(duration.as_nanos() as u64 / 20));
             }
         }
+        self.search_active = true;
         
         for depth in 1..=self.depth {
             let mut best = (0, -MATE_VALUE);
@@ -77,22 +87,23 @@ impl<'a> Search<'a> {
                 self.state = copy;
             }
 
-            if let Some(duration) = self.search_duration {
-                if depth > 1 && Instant::now().duration_since(self.search_start) > duration {
-                    break;
-                }
+            if !self.search_active && depth > 1 {
+                break;
             }
 
             self.best = best;
-    
-            if let Some(out) = &mut self.out {
-                writeln!(out, "info depth {} nodes {} bestmove {} cp {}", depth, self.node_counter, move_to_algebraic(best.0), match self.state.to_move {
-                    Colour::White => self.best.1,
-                    Colour::Black => -self.best.1
-                }).unwrap();
+
+            if let Some(channels) = &mut self.channels {
+                channels.0.send(Message::Info(depth, self.node_counter, best.0, match self.state.to_move {
+                    Colour::White => best.1,
+                    Colour::Black => -best.1
+                })).unwrap();
             }
         }
-
+        
+        if let Some(channels) = self.channels {
+            channels.0.send(Message::Done).unwrap();
+        }
         (self.best.0, match self.state.to_move {
             Colour::White => self.best.1,
             Colour::Black => -self.best.1
@@ -100,8 +111,23 @@ impl<'a> Search<'a> {
     }
 
     fn negamax(&mut self, mut alpha: isize, beta: isize, mut depth: usize, current_ply: usize) -> isize {
-        if let Some(duration) = self.search_duration {
-            if self.node_counter % 2048 == 0 && Instant::now().duration_since(self.search_start) > duration {
+        if self.node_counter % 2048 == 0 {
+            if let Some(duration) = self.search_duration {
+                if Instant::now().duration_since(self.search_start) > duration {
+                    self.search_active = false;
+                }
+            }
+
+            if let Some(channels) = &self.channels {
+                match channels.1.try_recv() {
+                    Ok(Message::Stop) => {
+                        self.search_active = false;
+                    },
+                    _ => {}
+                }
+            }
+
+            if !self.search_active {
                 return alpha;
             }
         }

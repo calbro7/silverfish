@@ -5,20 +5,24 @@ use crate::colours::Colour;
 use crate::pieces::Piece;
 use crate::perft::perft;
 use crate::eval::eval;
-use crate::search::Search;
+use crate::search::{Search, Message};
 use std::process::exit;
 use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{channel, Sender};
 
-pub struct UciHandler<'a> {
+pub struct UciHandler {
     state: State,
-    out: &'a mut dyn std::io::Write
+    out: Arc<Mutex<dyn std::io::Write + std::marker::Send>>,
+    transmitter: Option<Sender<Message>>
 }
 
-impl<'a> UciHandler<'a> {
-    pub fn new(out: &'a mut dyn std::io::Write) -> Self {
+impl UciHandler {
+    pub fn new(out: Arc<Mutex<dyn std::io::Write + std::marker::Send>>) -> Self {
         Self {
             state: State::start_pos(),
-            out: out
+            out: out,
+            transmitter: None
         }
     }
 
@@ -34,6 +38,9 @@ impl<'a> UciHandler<'a> {
         }
         else if command.starts_with("go") {
             self.go(command);
+        }
+        else if command.starts_with("stop") {
+            self.stop();
         }
         else if command.starts_with("uci") {
             self.uci();
@@ -53,7 +60,7 @@ impl<'a> UciHandler<'a> {
     }
 
     fn isready(&mut self) {
-        writeln!(self.out, "readyok").unwrap();
+        writeln!(self.out.lock().unwrap(), "readyok").unwrap();
     }
 
     fn ucinewgame(&mut self,) {
@@ -131,7 +138,6 @@ impl<'a> UciHandler<'a> {
 
     fn go(&mut self, command: &str) {
         let mut searcher = Search::new(self.state);
-        searcher.set_out(Some(self.out));
 
         let mut segments = command.split_whitespace().skip(1);
         loop {
@@ -154,13 +160,38 @@ impl<'a> UciHandler<'a> {
             }
         }
 
-        let best = searcher.go();
-        writeln!(self.out, "bestmove {}", move_to_algebraic(best.0)).unwrap();
+        let (uci_transmitter, search_receiver) = channel();
+        let (search_transmitter, uci_receiver) = channel();
+        self.transmitter = Some(uci_transmitter);
+        searcher.set_channels(Some((search_transmitter, search_receiver)));
+
+        let out1 = self.out.clone();
+        std::thread::spawn(move || {
+            let bestmove = searcher.go();
+            writeln!(out1.lock().unwrap(), "bestmove {}", move_to_algebraic(bestmove.0)).unwrap();
+        });
+
+        let out2 = self.out.clone();
+        std::thread::spawn(move || {
+            loop {
+                match uci_receiver.recv().unwrap() {
+                    Message::Info(depth, nodes, bestmove, cp) => writeln!(out2.lock().unwrap(), "info depth {} nodes {} bestmove {} cp {}", depth, nodes, move_to_algebraic(bestmove), cp).unwrap(),
+                    Message::Done => {
+                        break;
+                    },
+                    _ => {}
+                }
+            }
+        });
+    }
+
+    fn stop(&mut self) {
+        self.transmitter.as_ref().unwrap().send(Message::Stop).unwrap();
     }
 
     fn uci(&mut self) {
-        writeln!(self.out, "id name silverfish").unwrap();
-        writeln!(self.out, "uciok").unwrap();
+        writeln!(self.out.lock().unwrap(), "id name silverfish").unwrap();
+        writeln!(self.out.lock().unwrap(), "uciok").unwrap();
     }
 
     fn quit(&self) {
@@ -194,17 +225,17 @@ impl<'a> UciHandler<'a> {
             let n = perft(&mut self.state, depth-1);
             self.state = copy;
             total += n;
-            writeln!(self.out, "{}: {}", move_to_algebraic(r#move), n).unwrap();
+            writeln!(self.out.lock().unwrap(), "{}: {}", move_to_algebraic(r#move), n).unwrap();
         }
 
-        writeln!(self.out, "Total: {} ({:.3?})", total, start.elapsed()).unwrap();
+        writeln!(self.out.lock().unwrap(), "Total: {} ({:.3?})", total, start.elapsed()).unwrap();
     }
 
     fn eval(&mut self) {
-        writeln!(self.out, "{}", eval(&self.state)).unwrap();
+        writeln!(self.out.lock().unwrap(), "{}", eval(&self.state)).unwrap();
     }
 
     fn print(&mut self) {
-        writeln!(self.out, "{}", self.state).unwrap();
+        writeln!(self.out.lock().unwrap(), "{}", self.state).unwrap();
     }
 }
