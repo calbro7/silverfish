@@ -175,7 +175,9 @@ impl UciHandler {
         std::thread::spawn(move || {
             loop {
                 match uci_receiver.recv().unwrap() {
-                    Message::Info(depth, nodes, bestmove, cp) => writeln!(out2.lock().unwrap(), "info depth {} nodes {} bestmove {} cp {}", depth, nodes, move_to_algebraic(bestmove), cp).unwrap(),
+                    Message::Info(depth, nodes, bestmove, cp, pv) => {
+                        writeln!(out2.lock().unwrap(), "info depth {} nodes {} bestmove {} cp {} pv {}", depth, nodes, move_to_algebraic(bestmove), cp, pv).unwrap()
+                    },
                     Message::Done => {
                         break;
                     },
