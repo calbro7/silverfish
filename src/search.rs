@@ -99,7 +99,7 @@ impl Search {
         self.search_start = Instant::now();
         if self.search_duration.is_none() {
             if let Some(duration) = self.times[self.state.to_move as usize] {
-                self.search_duration = Some(Duration::from_nanos(duration.as_nanos() as u64 / 20));
+                self.search_duration = Some(duration / 20);
             }
         }
         self.search_active = true;
