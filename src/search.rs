@@ -11,7 +11,7 @@ use std::sync::mpsc::{Sender, Receiver};
 const MATE_VALUE: isize = 10000;
 
 pub enum Message {
-    Info(usize, usize, BitMove, isize, Line),
+    Info(usize, usize, Duration, BitMove, isize, Line), // depth, nodes, duration, bestmove, eval, pv
     Done,
     Stop
 }
@@ -141,7 +141,7 @@ impl Search {
             self.previous_pv = pv;
 
             if let Some(channels) = &mut self.channels {
-                channels.0.send(Message::Info(depth, self.node_counter, best.0, match self.state.to_move {
+                channels.0.send(Message::Info(depth, self.node_counter, Instant::now().duration_since(self.search_start), best.0, match self.state.to_move {
                     Colour::White => best.1,
                     Colour::Black => -best.1
                 }, self.previous_pv)).unwrap();
