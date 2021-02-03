@@ -1,12 +1,38 @@
 use crate::pieces::Piece;
 use crate::colours::Colour;
 use crate::bitboards::{get_bit, set_bit, clear_bit, get_ls1b};
-use crate::helpers::{rank_file_to_sq, sq_to_algebraic, algebraic_to_sq};
+use crate::helpers::{rank_file_to_sq, sq_file, sq_to_algebraic, algebraic_to_sq};
 use crate::castling::{CastleType, decode_castling};
 use crate::attacks::{PAWN_ATTACKS,KNIGHT_ATTACKS,bishop_attacks,rook_attacks,queen_attacks,KING_ATTACKS};
 use crate::moves::{BitMove, move_from, move_to, move_piece, move_is_capture, move_promotion_piece, move_is_double_push, move_is_ep, move_is_castle};
+use crate::zobrist;
 use crate::errors::{InvalidFenError, IllegalMoveError};
 use std::fmt;
+
+#[derive(Clone, Copy)]
+pub struct History {
+    hashes: [u64; 255],
+    length: usize
+}
+
+impl History {
+    pub fn new() -> Self {
+        Self {
+            hashes: [0; 255],
+            length: 0
+        }
+    }
+
+    pub fn push(&mut self, hash: u64) {
+        self.hashes[self.length] = hash;
+        self.length += 1;
+    }
+
+    pub fn clear(&mut self) {
+        self.hashes = [0; 255];
+        self.length = 0;
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct State {
@@ -16,7 +42,9 @@ pub struct State {
     pub to_move: Colour,
     pub ep_target: Option<usize>,
     pub castling: u8,
-    pub halfmove_clock: u8
+    pub halfmove_clock: u8,
+    hash: u64,
+    pub history: History
 }
 
 impl State {
@@ -28,7 +56,9 @@ impl State {
             to_move: Colour::White,
             ep_target: None,
             castling: 0,
-            halfmove_clock: 0
+            halfmove_clock: 0,
+            hash: 0,
+            history: History::new()
         }
     }
 
@@ -67,13 +97,18 @@ impl State {
 
                 state.pieces[piece as usize] = set_bit(state.pieces[piece as usize], sq);
                 state.colours[colour as usize] = set_bit(state.colours[colour as usize], sq);
+                state.hash ^= zobrist::PIECES[colour as usize][piece as usize][sq];
 
                 sq += 1;
             }
         }
 
         state.to_move = match fen_segments[1] {
-            "w" => Colour::White,
+            "w" => {
+                state.hash ^= zobrist::WHITE_MOVE;
+
+                Colour::White
+            },
             "b" => Colour::Black,
             _ => {
                 return Err(InvalidFenError {
@@ -94,10 +129,16 @@ impl State {
         if fen_segments[2].contains('q') {
             state.castling |= CastleType::BlackQueenside as u8
         }
+        state.hash ^= zobrist::CASTLING[state.castling as usize];
 
         state.ep_target = match fen_segments[3] {
             "-" => None,
-            sq => Some(algebraic_to_sq(sq))
+            sq => {
+                let sq = algebraic_to_sq(sq);
+                state.hash ^= zobrist::EP_FILE[sq_file(sq)];
+
+                Some(sq)
+            }
         };
 
         state.halfmove_clock = fen_segments[4].parse().unwrap();
@@ -135,19 +176,30 @@ impl State {
         let is_double_push = move_is_double_push(r#move);
         let is_ep = move_is_ep(r#move);
         let is_castle = move_is_castle(r#move);
+
+        self.hash ^= zobrist::PIECES[self.to_move as usize][piece as usize][from];
+        if let Some(sq) = self.ep_target {
+            self.hash ^= zobrist::EP_FILE[sq_file(sq)];
+        }
         
         if is_capture {
-            for piece_bb in &mut self.pieces {
-                *piece_bb = clear_bit(*piece_bb, to);
+            for piece in &[Piece::Pawn, Piece::Knight, Piece::Bishop, Piece::Rook, Piece::Queen, Piece::King] {
+                if get_bit(self.pieces[*piece as usize], to) {
+                    self.hash ^= zobrist::PIECES[!self.to_move as usize][*piece as usize][to];
+                    self.pieces[*piece as usize] = clear_bit(self.pieces[*piece as usize], to);
+                    break;
+                }
             }
             self.colours[!self.to_move as usize] = clear_bit(self.colours[!self.to_move as usize], to);
         }
 
         self.pieces[piece as usize] = clear_bit(self.pieces[piece as usize], from);
         if let Some(promotion_piece) = promotion_piece {
+            self.hash ^= zobrist::PIECES[self.to_move as usize][promotion_piece as usize][to];
             self.pieces[promotion_piece as usize] = set_bit(self.pieces[promotion_piece as usize], to);
         }
         else {
+            self.hash ^= zobrist::PIECES[self.to_move as usize][piece as usize][to];
             self.pieces[piece as usize] = set_bit(self.pieces[piece as usize], to);
         }
 
@@ -159,6 +211,8 @@ impl State {
                 Colour::White => self.ep_target.unwrap() - 8,
                 Colour::Black => self.ep_target.unwrap() + 8
             };
+            self.hash ^= zobrist::PIECES[!self.to_move as usize][Piece::Pawn as usize][captured_pawn_sq];
+            self.hash ^= zobrist::EP_FILE[sq_file(to)];
             self.pieces[Piece::Pawn as usize] = clear_bit(self.pieces[Piece::Pawn as usize], captured_pawn_sq);
             self.colours[!self.to_move as usize] = clear_bit(self.colours[!self.to_move as usize], captured_pawn_sq);
         }
@@ -170,6 +224,9 @@ impl State {
             },
             false => None
         };
+        if let Some(sq) = self.ep_target {
+            self.hash ^= zobrist::EP_FILE[sq_file(sq)];
+        }
 
         if is_castle {
             match to {
@@ -200,6 +257,7 @@ impl State {
                 _ => panic!("Invalid castle move")
             }
         }
+        self.hash ^= zobrist::CASTLING[self.castling as usize];
         if from == 0 || to == 0 {
             self.castling &= !(CastleType::WhiteQueenside as u8);
         }
@@ -218,6 +276,7 @@ impl State {
         if from == 60 || to == 60 {
             self.castling &= !(CastleType::BlackQueenside as u8) & !(CastleType::BlackKingside as u8);
         }
+        self.hash ^= zobrist::CASTLING[self.castling as usize];
 
         self.occupancy = self.colours[Colour::White as usize] | self.colours[Colour::Black as usize];
 
@@ -234,8 +293,29 @@ impl State {
         }
 
         self.to_move = !self.to_move;
+        self.hash ^= zobrist::WHITE_MOVE;
+        if piece == Piece::Pawn || is_castle || is_capture {
+            self.history.clear();
+        }
+        else {
+            self.history.push(copy.hash);
+        }
 
         Ok(())
+    }
+
+    pub fn is_repetition(&self) -> bool {
+        if self.history.length == 0 {
+            return false;
+        }
+
+        for i in (0..self.history.length-1).rev().step_by(2) {
+            if self.history.hashes[i] == self.hash {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -301,12 +381,13 @@ impl fmt::Display for State {
                 output.push('q')
             }
         }
-
         output.push('\n');
+
         output.push_str(&format!("EP target: {}", match self.ep_target {
             Some(sq) => sq_to_algebraic(sq),
             None => "-".to_string()
         }));
+        output.push('\n');
 
         write!(f, "{}", output)
     }

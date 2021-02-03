@@ -187,6 +187,10 @@ impl Search {
 
         self.node_counter += 1;
 
+        if current_ply > 0 && current_ply % 2 == 0 && self.state.is_repetition() {
+            return 0;
+        }
+
         let mut line = Line::new();
 
         if self.state.is_in_check(self.state.to_move) {

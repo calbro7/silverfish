@@ -1,6 +1,7 @@
 use std::env;
 use std::fs;
 use std::path::Path;
+use rand::random;
 
 const NOT_A_FILE: u64 = 0b1111111011111110111111101111111011111110111111101111111011111110;
 const NOT_H_FILE: u64 = 0b0111111101111111011111110111111101111111011111110111111101111111;
@@ -137,7 +138,7 @@ fn northwest_ray(sq: usize) -> u64 {
     bb
 }
 
-fn main () {
+fn create_attacks_file () {
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("attacks.rs");
     let mut contents = String::new();
@@ -209,4 +210,49 @@ fn main () {
     contents.push_str("];");
 
     fs::write(dest_path, &contents).unwrap();
+}
+
+fn create_zobrist_file() {
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("zobrist.rs");
+    let mut contents = String::new();
+
+    contents.push_str("pub const PIECES: [[[u64; 64]; 6]; 2] = [");
+    for _colour in 0..2 {
+        contents.push('[');
+        for _piece in 0..6 {
+            contents.push('[');
+            for _sq in 0..64 {
+                let rand: u64 = random();
+                contents.push_str(&format!("{},", rand));
+            }
+            contents.push_str("],");
+        }
+        contents.push_str("],");
+    }
+    contents.push_str("];");
+    
+    contents.push_str("pub const CASTLING: [u64; 16] = [");
+    for _ in 0..16 {
+        let rand: u64 = random();
+        contents.push_str(&format!("{},", rand));
+    }
+    contents.push_str("];");
+
+    contents.push_str("pub const EP_FILE: [u64; 8] = [");
+    for _ in 0..8 {
+        let rand: u64 = random();
+        contents.push_str(&format!("{},", rand));
+    }
+    contents.push_str("];");
+
+    let rand: u64 = random();
+    contents.push_str(&format!("pub const WHITE_MOVE: u64 = {};", rand));
+
+    fs::write(dest_path, &contents).unwrap();
+}
+
+fn main() {
+    create_attacks_file();
+    create_zobrist_file();
 }

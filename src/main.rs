@@ -12,6 +12,7 @@ mod perft;
 mod eval;
 mod search;
 mod tests;
+mod zobrist;
 use text_io::read;
 use std::sync::{Arc, Mutex};
 

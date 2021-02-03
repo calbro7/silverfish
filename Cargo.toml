@@ -1,6 +1,6 @@
 [package]
 name = "silverfish"
-version = "3.0.0"
+version = "4.0.0"
 authors = ["Callum Browne <callum@callumbrowne.me>"]
 edition = "2018"
 
@@ -10,3 +10,6 @@ edition = "2018"
 text_io = "0.1.8"
 more-asserts = "0.2.1"
 regex = "1.4.2"
+
+[build-dependencies]
+rand = "0.5.4"
