@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use std::sync::mpsc::{Sender, Receiver};
 
 const MATE_VALUE: isize = 10000;
+const MAX_PLY: usize = 64;
 
 pub enum Message {
     Info(usize, usize, Duration, BitMove, isize, Line), // depth, nodes, duration, bestmove, eval, pv
@@ -19,7 +20,7 @@ pub enum Message {
 #[derive(Copy, Clone)]
 pub struct Line {
     pub length: usize,
-    pub moves: [BitMove; 64]
+    pub moves: [BitMove; MAX_PLY]
 }
 
 impl Line {
@@ -28,14 +29,6 @@ impl Line {
             length: 0,
             moves: [0; 64]
         }
-    }
-
-    pub fn from_move(r#move: BitMove) -> Self {
-        let mut val = Self::new();
-        val.length = 1;
-        val.moves[0] = r#move;
-        
-        val
     }
 }
 
@@ -52,14 +45,15 @@ impl fmt::Display for Line {
 pub struct Search {
     state: State,
     depth: usize,
+    depth_searched: usize,
     times: [Option<Duration>; 2],
     search_start: Instant,
     search_duration: Option<Duration>,
     search_active: bool,
     node_counter: usize,
     best: (BitMove, isize),
-    killers: [[BitMove; 2]; 64],
-    history: [[[usize; 64]; 64]; 2],
+    killers: [[BitMove; 2]; MAX_PLY],
+    history: [[[usize; MAX_PLY]; MAX_PLY]; 2],
     previous_pv: Line,
     channels: Option<(Sender<Message>, Receiver<Message>)>
 }
@@ -69,14 +63,15 @@ impl Search {
         Self {
             state,
             depth: usize::MAX,
+            depth_searched: 0,
             times: [None; 2],
             search_start: Instant::now(),
             search_duration: None,
             search_active: false,
             node_counter: 0,
             best: (0, -MATE_VALUE),
-            killers: [[0; 2]; 64],
-            history: [[[0; 64]; 64]; 2],
+            killers: [[0; 2]; MAX_PLY],
+            history: [[[0; MAX_PLY]; MAX_PLY]; 2],
             previous_pv: Line::new(),
             channels: None
         }
@@ -105,45 +100,20 @@ impl Search {
         self.search_active = true;
         
         for depth in 1..=self.depth {
-            let mut best = (0, -MATE_VALUE);
             let mut pv = Line::new();
-
-            let mut moves = generate_moves(&self.state);
-            self.sort_moves(&mut moves, 0, true);
-    
-            while let Some(r#move) = moves.next() {
-                let copy = self.state.clone();
-                if self.state.make_move(r#move).is_err() {
-                    continue;
-                }
-
-                let mut line = Line::from_move(r#move);
-                let score = -self.negamax(-MATE_VALUE, MATE_VALUE, depth-1, 1, &mut line, r#move == self.previous_pv.moves[0]);
-                for i in (0..line.length).rev() {
-                    line.moves[i+1] = line.moves[i];
-                }
-                line.moves[0] = r#move;
-                line.length += 1;
-
-                if score >= best.1 {
-                    best.0 = r#move;
-                    best.1 = score;
-                    pv = line;
-                }
-                self.state = copy;
-            }
+            self.negamax(-MATE_VALUE, MATE_VALUE, depth, 0, &mut pv, true);
+            self.previous_pv = pv;
 
             if !self.search_active && depth > 1 {
                 break;
             }
 
-            self.best = best;
-            self.previous_pv = pv;
+            self.depth_searched = depth;
 
             if let Some(channels) = &mut self.channels {
-                channels.0.send(Message::Info(depth, self.node_counter, Instant::now().duration_since(self.search_start), best.0, match self.state.to_move {
-                    Colour::White => best.1,
-                    Colour::Black => -best.1
+                channels.0.send(Message::Info(depth, self.node_counter, Instant::now().duration_since(self.search_start), self.best.0, match self.state.to_move {
+                    Colour::White => self.best.1,
+                    Colour::Black => -self.best.1
                 }, self.previous_pv)).unwrap();
             }
         }
@@ -158,7 +128,7 @@ impl Search {
     }
 
     fn negamax(&mut self, mut alpha: isize, beta: isize, mut depth: usize, current_ply: usize, mut pline: &mut Line, mut in_pv: bool) -> isize {
-        if self.node_counter % 2048 == 0 {
+        if self.depth_searched > 1 && self.node_counter % 2048 == 0 {
             if let Some(duration) = self.search_duration {
                 if Instant::now().duration_since(self.search_start) > duration {
                     self.search_active = false;
@@ -179,6 +149,14 @@ impl Search {
             }
         }
 
+        if current_ply >= MAX_PLY {
+            return relative_eval(&self.state);
+        }
+
+        if self.state.is_in_check(self.state.to_move) {
+            depth += 1;
+        }
+
         if depth == 0 {
             pline.length = 0;
 
@@ -193,13 +171,10 @@ impl Search {
 
         let mut line = Line::new();
 
-        if self.state.is_in_check(self.state.to_move) {
-            depth += 1;
-        }
-
         let mut moves = generate_moves(&self.state);
         self.sort_moves(&mut moves, current_ply, in_pv);
         let mut num_legal_moves = 0;
+        let mut bestmove: BitMove = 0;
         while let Some(r#move) = moves.next() {
             let copy = self.state.clone();
             if self.state.make_move(r#move).is_err() {
@@ -239,17 +214,23 @@ impl Search {
                 }
                 pline.length = line.length + 1;
 
+                bestmove = r#move;
+
                 alpha = score;
             }
         }
 
         if num_legal_moves == 0 {
             if self.state.is_in_check(self.state.to_move) {
-                return -MATE_VALUE + (current_ply as isize);
+                alpha = -MATE_VALUE + (current_ply as isize);
             }
             else {
-                return 0;
+                alpha = 0;
             }
+        }
+
+        if self.search_active && bestmove != 0 && current_ply == 0 {
+            self.best = (bestmove, alpha);
         }
 
         alpha
@@ -257,12 +238,18 @@ impl Search {
 
     fn quiescence(&mut self, mut alpha: isize, beta: isize, current_ply: usize) -> isize {
         if let Some(duration) = self.search_duration {
-            if self.node_counter % 2048 == 0 && Instant::now().duration_since(self.search_start) > duration {
+            if self.depth_searched > 1 && self.node_counter % 2048 == 0 && Instant::now().duration_since(self.search_start) > duration {
+                self.search_active = false;
+
                 return alpha;
             }
         }
 
         self.node_counter += 1;
+
+        if current_ply >= MAX_PLY {
+            return relative_eval(&self.state);
+        }
 
         let standing_pat = relative_eval(&self.state);
         if standing_pat >= beta {
