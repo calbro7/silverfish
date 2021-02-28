@@ -4,6 +4,8 @@ use crate::pieces::Piece;
 use crate::bitboards::{get_bit};
 use crate::eval::relative_eval;
 use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_from, move_to, MoveList, move_to_algebraic};
+use std::cmp::{max, min};
+use std::collections::HashMap;
 use std::fmt;
 use std::time::{Duration, Instant};
 use std::sync::mpsc::{Sender, Receiver};
@@ -12,7 +14,7 @@ const MATE_VALUE: isize = 10000;
 const MAX_PLY: usize = 64;
 
 pub enum Message {
-    Info(usize, usize, Duration, BitMove, isize, Line), // depth, nodes, duration, bestmove, eval, pv
+    Info(usize, usize, usize, Duration, BitMove, isize, Line), // depth, nodes, tt hits, duration, bestmove, eval, pv
     Done,
     Stop
 }
@@ -42,6 +44,12 @@ impl fmt::Display for Line {
     }
 }
 
+struct TtEntry {
+    score: isize,
+    depth: usize,
+    flag: i8
+}
+
 pub struct Search {
     state: State,
     depth: usize,
@@ -54,6 +62,8 @@ pub struct Search {
     best: (BitMove, isize),
     killers: [[BitMove; 2]; MAX_PLY],
     history: [[[usize; MAX_PLY]; MAX_PLY]; 2],
+    tt_table: HashMap<u64, TtEntry>,
+    tt_hits: usize,
     previous_pv: Line,
     channels: Option<(Sender<Message>, Receiver<Message>)>
 }
@@ -72,6 +82,8 @@ impl Search {
             best: (0, -MATE_VALUE),
             killers: [[0; 2]; MAX_PLY],
             history: [[[0; MAX_PLY]; MAX_PLY]; 2],
+            tt_table: HashMap::new(),
+            tt_hits: 0,
             previous_pv: Line::new(),
             channels: None
         }
@@ -111,7 +123,7 @@ impl Search {
             self.depth_searched = depth;
 
             if let Some(channels) = &mut self.channels {
-                channels.0.send(Message::Info(depth, self.node_counter, Instant::now().duration_since(self.search_start), self.best.0, match self.state.to_move {
+                channels.0.send(Message::Info(depth, self.node_counter, self.tt_hits, Instant::now().duration_since(self.search_start), self.best.0, match self.state.to_move {
                     Colour::White => self.best.1,
                     Colour::Black => -self.best.1
                 }, self.previous_pv)).unwrap();
@@ -127,7 +139,7 @@ impl Search {
         })
     }
 
-    fn negamax(&mut self, mut alpha: isize, beta: isize, mut depth: usize, current_ply: usize, mut pline: &mut Line, mut in_pv: bool) -> isize {
+    fn negamax(&mut self, mut alpha: isize, mut beta: isize, mut depth: usize, current_ply: usize, mut pline: &mut Line, mut in_pv: bool) -> isize {
         if self.depth_searched > 1 && self.node_counter % 2048 == 0 {
             if let Some(duration) = self.search_duration {
                 if Instant::now().duration_since(self.search_start) > duration {
@@ -148,13 +160,35 @@ impl Search {
                 return alpha;
             }
         }
-
+        
         if current_ply >= MAX_PLY {
             return relative_eval(&self.state);
         }
 
         if self.state.is_in_check(self.state.to_move) {
             depth += 1;
+        }
+
+        let original_alpha = alpha;
+
+        if let Some(tt_entry) = self.tt_table.get(&self.state.hash) {
+            if tt_entry.depth >= depth {
+                self.tt_hits += 1;
+
+                if tt_entry.flag == 0 {
+                    return tt_entry.score;
+                }
+                if tt_entry.flag == -1 {
+                    alpha = max(alpha, tt_entry.score);
+                }
+                if tt_entry.flag == 1 {
+                    beta = min(beta, tt_entry.score);
+                }
+
+                if alpha >= beta {
+                    return tt_entry.score;
+                }
+            }
         }
 
         if depth == 0 {
@@ -201,6 +235,12 @@ impl Search {
                     self.killers[current_ply][0] = r#move;
                 }
 
+                self.tt_table.insert(self.state.hash, TtEntry {
+                    score: beta,
+                    depth,
+                    flag: -1
+                });
+
                 return beta;
             }
             if score > alpha {
@@ -232,6 +272,18 @@ impl Search {
         if self.search_active && bestmove != 0 && current_ply == 0 {
             self.best = (bestmove, alpha);
         }
+
+        self.tt_table.insert(self.state.hash, TtEntry {
+            score: alpha,
+            depth,
+            flag: if alpha <= original_alpha {
+                1
+            } else if alpha >= beta {
+                -1
+            } else {
+                0
+            }
+        });
 
         alpha
     }

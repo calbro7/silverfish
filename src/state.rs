@@ -43,7 +43,7 @@ pub struct State {
     pub ep_target: Option<usize>,
     pub castling: u8,
     pub halfmove_clock: u8,
-    hash: u64,
+    pub hash: u64,
     pub history: History
 }
 
