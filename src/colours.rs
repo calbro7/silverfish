@@ -1,6 +1,6 @@
 use std::ops::Not;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Colour {
     White,
     Black

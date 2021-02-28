@@ -34,15 +34,19 @@ impl History {
     }
 }
 
+type Square = Option<(Colour, Piece)>;
+
 #[derive(Clone, Copy)]
 pub struct State {
     pub pieces: [u64; 6],
     pub colours: [u64; 2],
     pub occupancy: u64,
+    squares: [Square; 64],
     pub to_move: Colour,
     pub ep_target: Option<usize>,
     pub castling: u8,
     pub halfmove_clock: u8,
+    pub fullmove_number: u16,
     pub hash: u64,
     pub history: History
 }
@@ -53,10 +57,12 @@ impl State {
             pieces: [0; 6],
             colours: [0; 2],
             occupancy: 0,
+            squares: [None; 64],
             to_move: Colour::White,
             ep_target: None,
             castling: 0,
             halfmove_clock: 0,
+            fullmove_number: 1,
             hash: 0,
             history: History::new()
         }
@@ -97,6 +103,7 @@ impl State {
 
                 state.pieces[piece as usize] = set_bit(state.pieces[piece as usize], sq);
                 state.colours[colour as usize] = set_bit(state.colours[colour as usize], sq);
+                state.squares[sq] = Some((colour, piece));
                 state.hash ^= zobrist::PIECES[colour as usize][piece as usize][sq];
 
                 sq += 1;
@@ -142,10 +149,95 @@ impl State {
         };
 
         state.halfmove_clock = fen_segments[4].parse().unwrap();
+        state.fullmove_number = fen_segments[5].parse().unwrap();
 
         state.occupancy = state.colours[Colour::White as usize] | state.colours[Colour::Black as usize];
 
         Ok(state)
+    }
+
+    pub fn to_fen(&self) -> String {
+        let mut fen = String::new();
+
+        for rank in (0..=7).rev() {
+            let mut empty = 0;
+            for file in 0..=7 {
+                let sq = rank_file_to_sq(rank, file);
+                match self.squares[sq] {
+                    Some(val) => {
+                        if empty > 0 {
+                            fen.push_str(&empty.to_string());
+                            empty = 0;
+                        }
+
+                        let mut piece_char = match val.1 {
+                            Piece::Pawn => 'p',
+                            Piece::Knight => 'n',
+                            Piece::Bishop => 'b',
+                            Piece::Rook => 'r',
+                            Piece::Queen => 'q',
+                            Piece::King => 'k'
+                        };
+                        if val.0 == Colour::White {
+                            piece_char = piece_char.to_ascii_uppercase();
+                        }
+
+                        fen.push(piece_char);
+                    },
+                    None => {
+                        empty += 1;
+                    }
+                }
+            }
+            if empty > 0 {
+                fen.push_str(&empty.to_string());
+            }
+            if rank > 0 {
+                fen.push('/');
+            }
+        }
+
+        fen.push(' ');
+        match self.to_move {
+            Colour::White => fen.push('w'),
+            Colour::Black => fen.push('b')
+        };
+
+        fen.push(' ');
+        let mut any_castle_available = false;
+        if decode_castling(self.castling, CastleType::WhiteKingside) {
+            fen.push('K');
+            any_castle_available = true;
+        }
+        if decode_castling(self.castling, CastleType::WhiteQueenside) {
+            fen.push('Q');
+            any_castle_available = true;
+        }
+        if decode_castling(self.castling, CastleType::BlackKingside) {
+            fen.push('k');
+            any_castle_available = true;
+        }
+        if decode_castling(self.castling, CastleType::BlackQueenside) {
+            fen.push('q');
+            any_castle_available = true;
+        }
+        if !any_castle_available {
+            fen.push('-');
+        }
+
+        fen.push(' ');
+        match self.ep_target {
+            Some(sq) => fen.push_str(&sq_to_algebraic(sq)),
+            None => fen.push('-')
+        };
+
+        fen.push(' ');
+        fen.push_str(&self.halfmove_clock.to_string());
+
+        fen.push(' ');
+        fen.push_str(&self.fullmove_number.to_string());
+
+        fen
     }
 
     pub fn square_attacked(&self, sq: usize, colour: Colour) -> bool {
@@ -177,6 +269,8 @@ impl State {
         let is_ep = move_is_ep(r#move);
         let is_castle = move_is_castle(r#move);
 
+        self.squares[from] = None;
+
         self.hash ^= zobrist::PIECES[self.to_move as usize][piece as usize][from];
         if let Some(sq) = self.ep_target {
             self.hash ^= zobrist::EP_FILE[sq_file(sq)];
@@ -197,10 +291,12 @@ impl State {
         if let Some(promotion_piece) = promotion_piece {
             self.hash ^= zobrist::PIECES[self.to_move as usize][promotion_piece as usize][to];
             self.pieces[promotion_piece as usize] = set_bit(self.pieces[promotion_piece as usize], to);
+            self.squares[to] = Some((self.to_move, promotion_piece));
         }
         else {
             self.hash ^= zobrist::PIECES[self.to_move as usize][piece as usize][to];
             self.pieces[piece as usize] = set_bit(self.pieces[piece as usize], to);
+            self.squares[to] = Some((self.to_move, piece));
         }
 
         self.colours[self.to_move as usize] = clear_bit(self.colours[self.to_move as usize], from);
@@ -215,6 +311,7 @@ impl State {
             self.hash ^= zobrist::EP_FILE[sq_file(to)];
             self.pieces[Piece::Pawn as usize] = clear_bit(self.pieces[Piece::Pawn as usize], captured_pawn_sq);
             self.colours[!self.to_move as usize] = clear_bit(self.colours[!self.to_move as usize], captured_pawn_sq);
+            self.squares[captured_pawn_sq] = None;
         }
         
         self.ep_target = match is_double_push {
@@ -235,24 +332,32 @@ impl State {
                     self.pieces[Piece::Rook as usize] = set_bit(self.pieces[Piece::Rook as usize], 5);
                     self.colours[Colour::White as usize] = clear_bit(self.colours[Colour::White as usize], 7);
                     self.colours[Colour::White as usize] = set_bit(self.colours[Colour::White as usize], 5);
+                    self.squares[7] = None;
+                    self.squares[5] = Some((Colour::White, Piece::Rook));
                 },
                 2 => {
                     self.pieces[Piece::Rook as usize] = clear_bit(self.pieces[Piece::Rook as usize], 0);
                     self.pieces[Piece::Rook as usize] = set_bit(self.pieces[Piece::Rook as usize], 3);
                     self.colours[Colour::White as usize] = clear_bit(self.colours[Colour::White as usize], 0);
                     self.colours[Colour::White as usize] = set_bit(self.colours[Colour::White as usize], 3);
+                    self.squares[0] = None;
+                    self.squares[3] = Some((Colour::White, Piece::Rook));
                 },
                 62 => {
                     self.pieces[Piece::Rook as usize] = clear_bit(self.pieces[Piece::Rook as usize], 63);
                     self.pieces[Piece::Rook as usize] = set_bit(self.pieces[Piece::Rook as usize], 61);
                     self.colours[Colour::Black as usize] = clear_bit(self.colours[Colour::Black as usize], 63);
                     self.colours[Colour::Black as usize] = set_bit(self.colours[Colour::Black as usize], 61);
+                    self.squares[63] = None;
+                    self.squares[61] = Some((Colour::Black, Piece::Rook));
                 },
                 58 => {
                     self.pieces[Piece::Rook as usize] = clear_bit(self.pieces[Piece::Rook as usize], 56);
                     self.pieces[Piece::Rook as usize] = set_bit(self.pieces[Piece::Rook as usize], 59);
                     self.colours[Colour::Black as usize] = clear_bit(self.colours[Colour::Black as usize], 56);
                     self.colours[Colour::Black as usize] = set_bit(self.colours[Colour::Black as usize], 59);
+                    self.squares[56] = None;
+                    self.squares[59] = Some((Colour::Black, Piece::Rook));
                 },
                 _ => panic!("Invalid castle move")
             }
@@ -285,6 +390,10 @@ impl State {
         }
         else {
             self.halfmove_clock += 1;
+        }
+
+        if self.to_move == Colour::Black {
+            self.fullmove_number += 1;
         }
 
         if self.is_in_check(self.to_move) {
@@ -387,6 +496,9 @@ impl fmt::Display for State {
             Some(sq) => sq_to_algebraic(sq),
             None => "-".to_string()
         }));
+        output.push('\n');
+
+        output.push_str(&self.to_fen());
         output.push('\n');
 
         write!(f, "{}", output)
