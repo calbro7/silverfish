@@ -8,7 +8,7 @@ use std::time::Duration;
 #[test]
 fn isready() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("isready");
 
@@ -18,7 +18,7 @@ fn isready() {
 #[test]
 fn ucinewgame() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("ucinewgame");
     uci.command("print");
@@ -29,7 +29,7 @@ fn ucinewgame() {
 #[test]
 fn position_from_fen() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("position fen r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3");
     uci.command("print");
@@ -40,7 +40,7 @@ fn position_from_fen() {
 #[test]
 fn position_from_fen_with_moves() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("position fen r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3 moves f1b5");
     uci.command("print");
@@ -51,7 +51,7 @@ fn position_from_fen_with_moves() {
 #[test]
 fn position_startpos() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     // By default the state will be the starting position, so to test the startpos command we need to set it to something else first
     uci.command("position fen r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3 moves f1b5");
@@ -64,7 +64,7 @@ fn position_startpos() {
 #[test]
 fn position_startpos_with_moves() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("position startpos moves e2e4 e7e5 g1f3 b8c6 f1b5");
     uci.command("print");
@@ -75,7 +75,7 @@ fn position_startpos_with_moves() {
 #[test]
 fn position_with_invalid_moves() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("position startpos moves e2e4 e7e5 not valid");
     uci.command("print");
@@ -86,7 +86,7 @@ fn position_with_invalid_moves() {
 #[test]
 fn go_with_movetime() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     // The best move will of course depend on the searching and evaluation, but we choose a position for which there is objectively only one standout move (capturing the hanging queen)
     uci.command("position fen rnb1kbnr/pppp1ppp/8/4p1qQ/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3");
@@ -102,7 +102,7 @@ fn go_with_movetime() {
 #[test]
 fn go_with_wtime() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     // The best move will of course depend on the searching and evaluation, but we choose a position for which there is objectively only one standout move (capturing the hanging queen)
     uci.command("position fen rnb1kbnr/pppp1ppp/8/4p1qQ/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3");
@@ -118,7 +118,7 @@ fn go_with_wtime() {
 #[test]
 fn go_with_btime() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     // The best move will of course depend on the searching and evaluation, but we choose a position for which there is objectively only one standout move (capturing the hanging queen)
     uci.command("position fen rnb1kbnr/pppp1ppp/8/4p1qQ/4P3/7P/PPPP1PP1/RNB1KBNR b KQkq - 0 3");
@@ -134,7 +134,7 @@ fn go_with_btime() {
 #[test]
 fn go_with_depth() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     // The best move will of course depend on the searching and evaluation, but we choose a position for which there is objectively only one standout move (capturing the hanging queen)
     uci.command("position fen rnb1kbnr/pppp1ppp/8/4p1qQ/4P3/8/PPPP1PPP/RNB1KBNR w KQkq - 2 3");
@@ -153,7 +153,7 @@ fn go_with_depth() {
 #[test]
 fn uci() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("uci");
 
@@ -163,7 +163,7 @@ fn uci() {
 #[test]
 fn perft() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("position fen k4b1K/4P3/8/8/8/8/8/8 w - - 0 1");
     uci.command("perft 5");
@@ -175,7 +175,7 @@ fn perft() {
 #[test]
 fn eval() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("eval");
 
@@ -185,7 +185,7 @@ fn eval() {
 #[test]
 fn print() {
     let output = Arc::new(Mutex::new(Vec::new()));
-    let mut uci = UciHandler::new(output.clone());
+    let mut uci = UciHandler::new(None, output.clone());
 
     uci.command("print");
 

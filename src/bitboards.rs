@@ -12,6 +12,10 @@ pub fn get_bit(bb: u64, sq: usize) -> bool {
     bb & (1 << sq) != 0
 }
 
+pub fn count_bits(bb: u64) -> usize {
+    bb.count_ones() as usize
+}
+
 pub fn get_ls1b(bb: u64) -> Option<usize> {
     if bb == 0 {
         None

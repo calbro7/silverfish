@@ -1,20 +1,23 @@
 use crate::state::State;
 use crate::colours::Colour;
 use crate::pieces::Piece;
-use crate::bitboards::{get_bit};
+use crate::bitboards::{get_bit, count_bits};
 use crate::eval::relative_eval;
-use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_from, move_to, MoveList, move_to_algebraic};
+use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_from, move_to, MoveList, move_to_algebraic, encode_move};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::{Duration, Instant};
 use std::sync::mpsc::{Sender, Receiver};
+use shakmaty::{CastlingMode, Chess, Role};
+use shakmaty::fen::Fen;
+use shakmaty_syzygy::{Tablebase, Dtz};
 
 const MATE_VALUE: isize = 10000;
 const MAX_PLY: usize = 64;
 
 pub enum Message {
-    Info(usize, usize, usize, Duration, BitMove, isize, Line), // depth, nodes, tt hits, duration, bestmove, eval, pv
+    Info(usize, usize, usize, usize, Duration, BitMove, isize, Line), // depth, nodes, tt hits, tb_hits, duration, bestmove, eval, pv
     Done,
     Stop
 }
@@ -64,12 +67,23 @@ pub struct Search {
     history: [[[usize; MAX_PLY]; MAX_PLY]; 2],
     tt_table: HashMap<u64, TtEntry>,
     tt_hits: usize,
+    tablebase: Option<Tablebase<Chess>>,
+    tb_hits: usize,
     previous_pv: Line,
     channels: Option<(Sender<Message>, Receiver<Message>)>
 }
 
 impl Search {
-    pub fn new(state: State) -> Self {
+    pub fn new(state: State, tb_directory: &Option<String>) -> Self {
+        let tablebase = match tb_directory {
+            Some(dir) => {
+                let mut tb = Tablebase::new();
+                tb.add_directory(dir).unwrap();
+                Some(tb)
+            },
+            None => None
+        };
+
         Self {
             state,
             depth: usize::MAX,
@@ -84,6 +98,8 @@ impl Search {
             history: [[[0; MAX_PLY]; MAX_PLY]; 2],
             tt_table: HashMap::new(),
             tt_hits: 0,
+            tablebase: tablebase,
+            tb_hits: 0,
             previous_pv: Line::new(),
             channels: None
         }
@@ -123,10 +139,12 @@ impl Search {
             self.depth_searched = depth;
 
             if let Some(channels) = &mut self.channels {
-                channels.0.send(Message::Info(depth, self.node_counter, self.tt_hits, Instant::now().duration_since(self.search_start), self.best.0, match self.state.to_move {
-                    Colour::White => self.best.1,
-                    Colour::Black => -self.best.1
-                }, self.previous_pv)).unwrap();
+                channels.0.send(Message::Info(depth, self.node_counter, self.tt_hits, self.tb_hits, Instant::now().duration_since(self.search_start), self.best.0, self.best.1, self.previous_pv)).unwrap();
+            }
+
+            // Slightly hacky way of detecting if we've found mate, because then we don't need to search at any higher depths
+            if self.best.1 >= MATE_VALUE - 100 {
+                break;
             }
         }
         
@@ -188,6 +206,59 @@ impl Search {
                 if alpha >= beta {
                     return tt_entry.score;
                 }
+            }
+        }
+
+        if let Some(tablebase) = &self.tablebase {
+            if count_bits(self.state.occupancy) <= 5 {
+                let pos: Chess = self.state.to_fen().parse::<Fen>().unwrap().position(CastlingMode::Standard).unwrap();
+                let tb_result = tablebase.best_move(&pos).unwrap();
+    
+                let (r#move, score) = match tb_result {
+                    Some(tb_result) => (
+                        encode_move(
+                            tb_result.0.from().unwrap() as usize,
+                            tb_result.0.to() as usize,
+                            Piece::Pawn,
+                            match tb_result.0.promotion() {
+                                Some(p) => Some(match p {
+                                    Role::Pawn => Piece::Pawn,
+                                    Role::Knight => Piece::Knight,
+                                    Role::Bishop => Piece::Bishop,
+                                    Role::Rook => Piece::Rook,
+                                    Role::Queen => Piece::Queen,
+                                    Role::King => Piece::King
+                                }),
+                                None => None
+                            },
+                            false,
+                            false,
+                            false,
+                            false
+                        ),
+                        match tb_result.1 {
+                            Dtz(x) if x > 0 => -MATE_VALUE + current_ply as isize + x as isize,
+                            Dtz(x) if x < 0 => MATE_VALUE - current_ply as isize + x as isize,
+                            _ => 0
+                        }
+                    ),
+                    None => if self.state.is_in_check(self.state.to_move) { (0, -MATE_VALUE + current_ply as isize) } else { (0, 0) }
+                };
+
+                self.tb_hits += 1;
+    
+                self.tt_table.insert(self.state.hash, TtEntry {
+                    score,
+                    depth: usize::MAX,
+                    flag: 0
+                });
+    
+                if current_ply == 0 {
+                    self.best = (r#move, score);
+                    self.search_active = false;
+                }
+    
+                return score;
             }
         }
 
@@ -301,6 +372,59 @@ impl Search {
 
         if current_ply >= MAX_PLY {
             return relative_eval(&self.state);
+        }
+
+        if let Some(tablebase) = &self.tablebase {
+            if count_bits(self.state.occupancy) <= 5 {
+                let pos: Chess = self.state.to_fen().parse::<Fen>().unwrap().position(CastlingMode::Standard).unwrap();
+                let tb_result = tablebase.best_move(&pos).unwrap();
+    
+                let (r#move, score) = match tb_result {
+                    Some(tb_result) => (
+                        encode_move(
+                            tb_result.0.from().unwrap() as usize,
+                            tb_result.0.to() as usize,
+                            Piece::Pawn,
+                            match tb_result.0.promotion() {
+                                Some(p) => Some(match p {
+                                    Role::Pawn => Piece::Pawn,
+                                    Role::Knight => Piece::Knight,
+                                    Role::Bishop => Piece::Bishop,
+                                    Role::Rook => Piece::Rook,
+                                    Role::Queen => Piece::Queen,
+                                    Role::King => Piece::King
+                                }),
+                                None => None
+                            },
+                            false,
+                            false,
+                            false,
+                            false
+                        ),
+                        match tb_result.1 {
+                            Dtz(x) if x > 0 => -MATE_VALUE + current_ply as isize + x as isize,
+                            Dtz(x) if x < 0 => MATE_VALUE - current_ply as isize + x as isize,
+                            _ => 0
+                        }
+                    ),
+                    None => if self.state.is_in_check(self.state.to_move) { (0, -MATE_VALUE + current_ply as isize) } else { (0, 0) }
+                };
+
+                self.tb_hits += 1;
+    
+                self.tt_table.insert(self.state.hash, TtEntry {
+                    score,
+                    depth: usize::MAX,
+                    flag: 0
+                });
+    
+                if current_ply == 0 {
+                    self.best = (r#move, score);
+                    self.search_active = false;
+                }
+    
+                return score;
+            }
         }
 
         let standing_pat = relative_eval(&self.state);

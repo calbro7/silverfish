@@ -13,14 +13,16 @@ use std::sync::mpsc::{channel, Sender};
 
 pub struct UciHandler {
     state: State,
+    tb_directory: Option<String>,
     out: Arc<Mutex<dyn std::io::Write + std::marker::Send>>,
     transmitter: Option<Sender<Message>>
 }
 
 impl UciHandler {
-    pub fn new(out: Arc<Mutex<dyn std::io::Write + std::marker::Send>>) -> Self {
+    pub fn new(tb_directory: Option<String>, out: Arc<Mutex<dyn std::io::Write + std::marker::Send>>) -> Self {
         Self {
             state: State::start_pos(),
+            tb_directory: tb_directory,
             out: out,
             transmitter: None
         }
@@ -137,7 +139,7 @@ impl UciHandler {
     }
 
     fn go(&mut self, command: &str) {
-        let mut searcher = Search::new(self.state);
+        let mut searcher = Search::new(self.state, &self.tb_directory);
 
         let mut segments = command.split_whitespace().skip(1);
         loop {
@@ -175,8 +177,8 @@ impl UciHandler {
         std::thread::spawn(move || {
             loop {
                 match uci_receiver.recv().unwrap() {
-                    Message::Info(depth, nodes, tt_hits, duration, bestmove, cp, pv) => {
-                        writeln!(out2.lock().unwrap(), "info depth {} nodes {} millis {} nps {} tt_hits {} bestmove {} cp {} pv {}", depth, nodes, duration.as_millis(), (1000000 * nodes as u128 / duration.as_micros()), tt_hits, move_to_algebraic(bestmove), cp, pv).unwrap()
+                    Message::Info(depth, nodes, tt_hits, tb_hits, duration, bestmove, cp, pv) => {
+                        writeln!(out2.lock().unwrap(), "info depth {} nodes {} millis {} nps {} tt_hits {} tb_hits {} bestmove {} cp {} pv {}", depth, nodes, duration.as_millis(), (1000000 * nodes as u128 / duration.as_micros()), tt_hits, tb_hits, move_to_algebraic(bestmove), cp, pv).unwrap()
                     },
                     Message::Done => {
                         break;
