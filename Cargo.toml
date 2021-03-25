@@ -1,6 +1,6 @@
 [package]
 name = "silverfish"
-version = "8.0.0"
+version = "9.0.0"
 authors = ["Callum Browne <callum@callumbrowne.me>"]
 edition = "2018"
 
@@ -13,6 +13,9 @@ regex = "1.4.2"
 shakmaty = "0.18.0"
 shakmaty-syzygy = "0.15.0"
 getopts = "0.2.21"
+lazy_static = "1.4.0"
+rand = "0.5.4"
+serde_yaml = "0.8.17"
 
 [build-dependencies]
 rand = "0.5.4"

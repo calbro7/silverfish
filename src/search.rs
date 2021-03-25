@@ -4,6 +4,8 @@ use crate::pieces::Piece;
 use crate::bitboards::{get_bit, count_bits};
 use crate::eval::relative_eval;
 use crate::moves::{generate_moves, BitMove, move_is_capture, move_is_ep, move_piece, move_from, move_to, MoveList, move_to_algebraic, encode_move};
+use crate::book::BOOK;
+use rand::{thread_rng, Rng};
 use std::cmp::{max, min};
 use std::collections::HashMap;
 use std::fmt;
@@ -119,32 +121,41 @@ impl Search {
     }
 
     pub fn go(mut self) -> (BitMove, isize) {
-        self.search_start = Instant::now();
-        if self.search_duration.is_none() {
-            if let Some(duration) = self.times[self.state.to_move as usize] {
-                self.search_duration = Some(duration / 20);
+        if self.state.fullmove_number <= 6 {
+            if let Some(result) = BOOK.get(&self.state.hash) {
+                let mut rng = thread_rng();
+                self.best = (*rng.choose(&result).unwrap(), 0);
             }
         }
-        self.search_active = true;
-        
-        for depth in 1..=self.depth {
-            let mut pv = Line::new();
-            self.negamax(-MATE_VALUE, MATE_VALUE, depth, 0, &mut pv, true);
-            self.previous_pv = pv;
 
-            if !self.search_active && depth > 1 {
-                break;
+        if self.best.0 == 0 {
+            self.search_start = Instant::now();
+            if self.search_duration.is_none() {
+                if let Some(duration) = self.times[self.state.to_move as usize] {
+                    self.search_duration = Some(duration / 20);
+                }
             }
-
-            self.depth_searched = depth;
-
-            if let Some(channels) = &mut self.channels {
-                channels.0.send(Message::Info(depth, self.node_counter, self.tt_hits, self.tb_hits, Instant::now().duration_since(self.search_start), self.best.0, self.best.1, self.previous_pv)).unwrap();
-            }
-
-            // Slightly hacky way of detecting if we've found mate, because then we don't need to search at any higher depths
-            if self.best.1 >= MATE_VALUE - 100 {
-                break;
+            self.search_active = true;
+            
+            for depth in 1..=self.depth {
+                let mut pv = Line::new();
+                self.negamax(-MATE_VALUE, MATE_VALUE, depth, 0, &mut pv, true);
+                self.previous_pv = pv;
+    
+                if !self.search_active && depth > 1 {
+                    break;
+                }
+    
+                self.depth_searched = depth;
+    
+                if let Some(channels) = &mut self.channels {
+                    channels.0.send(Message::Info(depth, self.node_counter, self.tt_hits, self.tb_hits, Instant::now().duration_since(self.search_start), self.best.0, self.best.1, self.previous_pv)).unwrap();
+                }
+    
+                // Slightly hacky way of detecting if we've found mate, because then we don't need to search at any higher depths
+                if self.best.1 >= MATE_VALUE - 100 {
+                    break;
+                }
             }
         }
         

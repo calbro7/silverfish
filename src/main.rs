@@ -13,12 +13,16 @@ mod eval;
 mod search;
 mod tests;
 mod zobrist;
+mod book;
 use text_io::read;
 use std::sync::{Arc, Mutex};
 use std::env;
 use getopts::Options;
+use lazy_static;
 
 fn main() {
+    lazy_static::initialize(&book::BOOK);
+
     let args: Vec<String> = env::args().collect();
     let mut opts = Options::new();
     opts.optopt("t", "syzygy", "Tablebase directory", "Tablebase");
