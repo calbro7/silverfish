@@ -4,3 +4,5 @@ mod eval;
 mod perft;
 #[cfg(test)]
 mod uci;
+#[cfg(test)]
+mod search;
